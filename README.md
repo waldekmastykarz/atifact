@@ -4,6 +4,16 @@ Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-
 
 Turn HAR files and Claude Code logs into standardized [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/docs/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
+## Use with AI agents
+
+Give your AI coding agent the atifact skill so it can extract trajectories on your behalf:
+
+```sh
+npx skills add waldekmastykarz/atifact
+```
+
+Once installed, ask your agent to _"extract the trajectory from this HAR file"_ or _"convert Claude Code logs to ATIF"_ and it will handle the rest.
+
 ## Install
 
 ```sh
