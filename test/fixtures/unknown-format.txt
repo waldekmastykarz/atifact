@@ -1,0 +1,2 @@
+This is just a plain text file that should not be recognized as any supported format.
+It has no JSON, no HAR structure, and no JSONL lines.
