@@ -29,6 +29,11 @@ describe("detectFormat", () => {
     assert.equal(result.format, "har");
   });
 
+  it("detects Copilot CLI JSONL", async () => {
+    const result = await detectFormat(fixture("copilot-cli-simple.jsonl"));
+    assert.equal(result.format, "copilot-cli-jsonl");
+  });
+
   it("throws on unknown format", async () => {
     await assert.rejects(
       () => detectFormat(fixture("unknown-format.txt")),

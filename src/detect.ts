@@ -13,6 +13,14 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
     };
   }
 
+  // JSONL: Copilot CLI stream format (session.* or user.message events)
+  if (looksLikeCopilotCliJsonl(firstLine)) {
+    return {
+      format: "copilot-cli-jsonl",
+      description: "Copilot CLI logs (JSONL)",
+    };
+  }
+
   // HAR: JSON object with log.version and log.entries
   if (looksLikeHar(firstLine)) {
     return { format: "har", description: "HTTP Archive (HAR)" };
@@ -20,7 +28,7 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
 
   throw new Error(
     `Unable to detect input format for: ${filePath}\n` +
-      `Supported formats: HAR (.har), Claude Code CLI logs (.jsonl)`
+      `Supported formats: HAR (.har), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl)`
   );
 }
 
@@ -31,6 +39,19 @@ function looksLikeClaudeCodeJsonl(firstLine: string): boolean {
       first.type === "system" &&
       first.subtype === "init" &&
       typeof first.session_id === "string"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeCopilotCliJsonl(firstLine: string): boolean {
+  try {
+    const first = JSON.parse(firstLine.split("\n")[0]);
+    return (
+      typeof first.type === "string" &&
+      (first.type.startsWith("session.") || first.type === "user.message") &&
+      typeof first.timestamp === "string"
     );
   } catch {
     return false;

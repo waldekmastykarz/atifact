@@ -97,7 +97,7 @@ export interface FinalMetrics {
 
 // Input format types
 
-export type InputFormat = "har" | "claude-code-jsonl";
+export type InputFormat = "har" | "claude-code-jsonl" | "copilot-cli-jsonl";
 
 export interface DetectedFormat {
   format: InputFormat;

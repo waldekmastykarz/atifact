@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { detectFormat } from "./detect.js";
 import { parseHar } from "./parsers/har.js";
 import { parseClaudeCode } from "./parsers/claude-code.js";
+import { parseCopilotCli } from "./parsers/copilot-cli.js";
 import type { InputFormat, Trajectory } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -31,7 +32,7 @@ ARGUMENTS
 
 OPTIONS
   -o, --output <path>   Output file path (default: <input>.trajectory.json)
-  -f, --format <fmt>    Force input format: har, claude-code-jsonl
+  -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl
                         (auto-detected if omitted)
       --json            Write JSON output to stdout instead of file
   -q, --quiet           Suppress progress messages (stderr only)
@@ -42,6 +43,7 @@ SUPPORTED INPUT FORMATS
   har                HAR files with OpenAI (Chat Completions, Responses API)
                      or Anthropic (Messages API) requests
   claude-code-jsonl  Claude Code CLI session logs (.jsonl)
+  copilot-cli-jsonl  Copilot CLI session logs (.jsonl)
 
 EXAMPLES
   atifact session.har                          Convert, write to session.trajectory.json
@@ -126,9 +128,9 @@ function parseArgs(argv: string[]): CliOptions {
 
     if (arg === "-f" || arg === "--format") {
       const fmt = args[++i];
-      if (!fmt || !["har", "claude-code-jsonl"].includes(fmt)) {
+      if (!fmt || !["har", "claude-code-jsonl", "copilot-cli-jsonl"].includes(fmt)) {
         process.stderr.write(
-          `Error: Invalid format "${fmt || ""}". Valid values: har, claude-code-jsonl\n`
+          `Error: Invalid format "${fmt || ""}". Valid values: har, claude-code-jsonl, copilot-cli-jsonl\n`
         );
         process.exit(2);
       }
@@ -240,6 +242,9 @@ async function main(): Promise<void> {
         break;
       case "claude-code-jsonl":
         trajectory = await parseClaudeCode(opts.input);
+        break;
+      case "copilot-cli-jsonl":
+        trajectory = await parseCopilotCli(opts.input);
         break;
       default:
         process.stderr.write(

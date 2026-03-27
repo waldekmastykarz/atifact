@@ -85,6 +85,20 @@ describe("CLI integration", () => {
     assert.ok(trajectory.steps.length > 0);
   });
 
+  it("converts Copilot CLI JSONL to ATIF with --json", async () => {
+    const { stdout } = await exec("node", [
+      cli,
+      fixture("copilot-cli-simple.jsonl"),
+      "--json",
+      "--quiet",
+    ]);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(trajectory.schema_version, "ATIF-v1.6");
+    assert.equal(trajectory.session_id, "session-xyz-789");
+    assert.equal(trajectory.agent.name, "copilot-cli");
+    assert.ok(trajectory.steps.length > 0);
+  });
+
   it("writes output to file by default", async () => {
     const input = fixture("claude-code-simple.jsonl");
     const expectedOutput = resolve(
