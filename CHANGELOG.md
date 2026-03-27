@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.0](https://github.com/waldekmastykarz/atifact/compare/v0.1.0...v0.2.0)
+
+### Features
+
+- Parse Copilot CLI JSONL output into ATIF trajectories
+
 ## [0.1.0](https://github.com/waldekmastykarz/atifact/releases/tag/v0.1.0)
 
 Initial release.
