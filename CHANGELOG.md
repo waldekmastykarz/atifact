@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0](https://github.com/waldekmastykarz/atifact/compare/v0.2.0...v0.3.0)
+
+### Features
+
+- Model fallback logic for Copilot CLI parser
+
 ## [0.2.0](https://github.com/waldekmastykarz/atifact/compare/v0.1.0...v0.2.0)
 
 ### Features
