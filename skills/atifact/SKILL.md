@@ -65,7 +65,7 @@ atifact session.jsonl -f copilot-cli-jsonl
 
 ### Pipe JSON to stdout
 
-Use `--json` with `--quiet` to suppress diagnostics and get clean JSON on stdout. Subagent trajectory files are still written to disk alongside the input file.
+Use `--json` with `--quiet` to suppress diagnostics and get clean JSON on stdout. Output is a JSON array of all trajectories (main first, then subagents). No files are written.
 
 ```bash
 atifact session.har --json --quiet
@@ -74,7 +74,7 @@ atifact session.har --json --quiet
 Combine with other tools:
 
 ```bash
-atifact session.har --json --quiet | jq '.steps | length'
+atifact session.har --json --quiet | jq '.[0].steps | length'
 ```
 
 ## CLI options
@@ -84,7 +84,7 @@ atifact session.har --json --quiet | jq '.steps | length'
 | `<input-file>` | | Path to the input file (required) |
 | `--output` | `-o` | Output path prefix. Main: `<prefix>.trajectory.json`, subagents: `<prefix>.trajectory.<name>.json` (default: input file path) |
 | `--format` | `-f` | Force input format: `har`, `claude-code-jsonl`, `copilot-cli-jsonl` |
-| `--json` | | Write main trajectory JSON to stdout instead of file (subagent files still written to disk) |
+| `--json` | | Write JSON array of all trajectories to stdout (no files written). First element is main, rest are subagents. |
 | `--quiet` | `-q` | Suppress progress messages (stderr only) |
 
 ## Exit codes

@@ -36,8 +36,8 @@ OPTIONS
                            Subagent files:   <prefix>.trajectory.<name>.json
   -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl
                         (auto-detected if omitted)
-      --json            Write main trajectory JSON to stdout instead of file
-                        (subagent trajectories are still written to files)
+      --json            Write JSON array of trajectories to stdout (no files written)
+                        Array contains main trajectory first, then subagent trajectories
   -q, --quiet           Suppress progress messages (stderr only)
   -h, --help            Show this help
       --version         Print version
@@ -51,8 +51,8 @@ SUPPORTED INPUT FORMATS
 EXAMPLES
   atifact session.har                          Convert, write to session.trajectory.json
   atifact session.har -o out                   Write to out.trajectory.json
-  atifact session.har --json | jq '.steps | length'   Pipe step count
-  atifact session.har --json --quiet           JSON to stdout, no diagnostics
+  atifact session.har --json | jq '.[0].steps | length'   Pipe step count
+  atifact session.har --json --quiet           JSON array to stdout, no diagnostics
   atifact claude-log.jsonl -f claude-code-jsonl        Force format
   atifact copilot.jsonl                        Write main + subagent trajectory files
 
@@ -81,9 +81,10 @@ JSON OUTPUT SCHEMA (ATIF v1.6)
   }
 
 OUTPUT
-  Primary output (ATIF JSON) goes to file or stdout (--json).
-  Subagent trajectories are written as separate files next to the main trajectory.
-  The --output prefix controls the base path for all output files.
+  File mode:   Main trajectory to <prefix>.trajectory.json, subagent trajectories
+               to <prefix>.trajectory.<name>.json.
+  --json mode: JSON array of all trajectories to stdout (no files written).
+               First element is the main trajectory, rest are subagents.
   Diagnostics and progress go to stderr.
 
 EXIT CODES
@@ -269,51 +270,52 @@ async function main(): Promise<void> {
 
   const { trajectory, subagentTrajectories } = result;
 
-  // Write subagent trajectory files and set trajectory_path references
-  if (subagentTrajectories && subagentTrajectories.size > 0) {
-    const outputPrefix = opts.json
-      ? resolve(dirname(opts.input), basename(opts.input))
-      : opts.output;
+  if (opts.json) {
+    // --json mode: output array of all trajectories to stdout, no files written
+    const allTrajectories = [trajectory];
+    if (subagentTrajectories) {
+      for (const sub of subagentTrajectories.values()) {
+        allTrajectories.push(sub);
+      }
+    }
+    const cleaned = stripUndefined(allTrajectories);
+    process.stdout.write(JSON.stringify(cleaned, null, 2));
+    process.stdout.write("\n");
+  } else {
+    // File mode: write separate files with trajectory_path references
+    if (subagentTrajectories && subagentTrajectories.size > 0) {
+      for (const [parentId, subTrajectory] of subagentTrajectories) {
+        // Derive file-safe name from session_id (last segment after ":")
+        const namePart = subTrajectory.session_id.includes(":")
+          ? subTrajectory.session_id.split(":").pop()!
+          : parentId;
+        const safeName = namePart.replace(/[^a-zA-Z0-9_-]/g, "-");
+        const subFilename = `${basename(opts.output)}.trajectory.${safeName}.json`;
+        const subPath = resolve(dirname(opts.output), subFilename);
 
-    for (const [parentId, subTrajectory] of subagentTrajectories) {
-      // Derive file-safe name from session_id (last segment after ":")
-      const namePart = subTrajectory.session_id.includes(":")
-        ? subTrajectory.session_id.split(":").pop()!
-        : parentId;
-      const safeName = namePart.replace(/[^a-zA-Z0-9_-]/g, "-");
-      const subFilename = `${basename(outputPrefix)}.trajectory.${safeName}.json`;
-      const subPath = resolve(dirname(outputPrefix), subFilename);
-
-      // Set trajectory_path on the matching subagent_trajectory_ref in parent trajectory
-      for (const step of trajectory.steps) {
-        if (!step.observation) continue;
-        for (const obs of step.observation.results) {
-          if (!obs.subagent_trajectory_ref) continue;
-          for (const ref of obs.subagent_trajectory_ref) {
-            if (ref.session_id === subTrajectory.session_id) {
-              ref.trajectory_path = subFilename;
+        // Set trajectory_path on the matching subagent_trajectory_ref in parent trajectory
+        for (const step of trajectory.steps) {
+          if (!step.observation) continue;
+          for (const obs of step.observation.results) {
+            if (!obs.subagent_trajectory_ref) continue;
+            for (const ref of obs.subagent_trajectory_ref) {
+              if (ref.session_id === subTrajectory.session_id) {
+                ref.trajectory_path = subFilename;
+              }
             }
           }
         }
+
+        // Write subagent file
+        const subCleaned = stripUndefined(subTrajectory);
+        await writeFile(subPath, JSON.stringify(subCleaned, null, 2) + "\n", "utf-8");
+        log(opts.quiet, `Wrote subagent: ${subPath}`);
       }
-
-      // Write subagent file
-      const subCleaned = stripUndefined(subTrajectory);
-      await writeFile(subPath, JSON.stringify(subCleaned, null, 2) + "\n", "utf-8");
-      log(opts.quiet, `Wrote subagent: ${subPath}`);
     }
-  }
 
-  const cleaned = stripUndefined(trajectory);
-  const jsonOutput = JSON.stringify(cleaned, null, 2);
-
-  // Output main trajectory
-  if (opts.json) {
-    process.stdout.write(jsonOutput);
-    process.stdout.write("\n");
-  } else {
+    const cleaned = stripUndefined(trajectory);
     const mainPath = `${opts.output}.trajectory.json`;
-    await writeFile(mainPath, jsonOutput + "\n", "utf-8");
+    await writeFile(mainPath, JSON.stringify(cleaned, null, 2) + "\n", "utf-8");
     log(opts.quiet, `Wrote ${mainPath}`);
   }
 

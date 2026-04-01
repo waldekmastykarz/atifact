@@ -67,10 +67,12 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectory = JSON.parse(stdout);
-    assert.equal(trajectory.schema_version, "ATIF-v1.6");
-    assert.equal(trajectory.session_id, "sess-abc123");
-    assert.ok(trajectory.steps.length > 0);
+    const trajectories = JSON.parse(stdout);
+    assert.ok(Array.isArray(trajectories));
+    assert.equal(trajectories.length, 1);
+    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
+    assert.equal(trajectories[0].session_id, "sess-abc123");
+    assert.ok(trajectories[0].steps.length > 0);
   });
 
   it("converts HAR to ATIF with --json", async () => {
@@ -80,9 +82,11 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectory = JSON.parse(stdout);
-    assert.equal(trajectory.schema_version, "ATIF-v1.6");
-    assert.ok(trajectory.steps.length > 0);
+    const trajectories = JSON.parse(stdout);
+    assert.ok(Array.isArray(trajectories));
+    assert.equal(trajectories.length, 1);
+    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
+    assert.ok(trajectories[0].steps.length > 0);
   });
 
   it("converts Copilot CLI JSONL to ATIF with --json", async () => {
@@ -92,11 +96,13 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectory = JSON.parse(stdout);
-    assert.equal(trajectory.schema_version, "ATIF-v1.6");
-    assert.equal(trajectory.session_id, "session-xyz-789");
-    assert.equal(trajectory.agent.name, "copilot-cli");
-    assert.ok(trajectory.steps.length > 0);
+    const trajectories = JSON.parse(stdout);
+    assert.ok(Array.isArray(trajectories));
+    assert.equal(trajectories.length, 1);
+    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
+    assert.equal(trajectories[0].session_id, "session-xyz-789");
+    assert.equal(trajectories[0].agent.name, "copilot-cli");
+    assert.ok(trajectories[0].steps.length > 0);
   });
 
   it("writes output to file by default", async () => {
@@ -132,8 +138,8 @@ describe("CLI integration", () => {
       "-f",
       "claude-code-jsonl",
     ]);
-    const trajectory = JSON.parse(stdout);
-    assert.equal(trajectory.agent.name, "claude-code");
+    const trajectories = JSON.parse(stdout);
+    assert.equal(trajectories[0].agent.name, "claude-code");
   });
 
   it("strips undefined/null fields from output", async () => {
@@ -245,5 +251,22 @@ describe("CLI integration", () => {
         }
       }
     }
+  });
+
+  it("outputs subagent trajectories in --json array", async () => {
+    const { stdout } = await exec("node", [
+      cli,
+      fixture("copilot-cli-subagent.jsonl"),
+      "--json",
+      "--quiet",
+    ]);
+    const trajectories = JSON.parse(stdout);
+    assert.ok(Array.isArray(trajectories));
+    assert.equal(trajectories.length, 2);
+    // First is main trajectory
+    assert.equal(trajectories[0].agent.model_name, "claude-opus-4.6-1m");
+    // Second is subagent
+    assert.equal(trajectories[1].agent.model_name, "gpt-5.4-mini");
+    assert.ok(trajectories[1].steps.length > 0);
   });
 });
