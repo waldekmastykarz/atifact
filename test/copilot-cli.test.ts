@@ -105,4 +105,19 @@ describe("parseCopilotCli", () => {
       assert.equal(userStep.timestamp, "2026-03-27T14:42:09.511Z");
     });
   });
+
+  describe("model fallback from tool.execution_complete", () => {
+    it("uses model from tool.execution_complete when session.tools_updated is missing", async () => {
+      const t = await parseCopilotCli(fixture("copilot-cli-no-tools-updated.jsonl"));
+      assert.equal(t.agent.model_name, "claude-opus-4.6-1m");
+    });
+
+    it("sets model_name on agent steps", async () => {
+      const t = await parseCopilotCli(fixture("copilot-cli-no-tools-updated.jsonl"));
+      const agentSteps = t.steps.filter((s) => s.source === "agent");
+      for (const step of agentSteps) {
+        assert.equal(step.model_name, "claude-opus-4.6-1m");
+      }
+    });
+  });
 });

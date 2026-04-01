@@ -132,7 +132,10 @@ export async function parseCopilotCli(filePath: string): Promise<Trajectory> {
     }
   }
 
-  const model = toolsUpdated?.data.model;
+  // Prefer model from session.tools_updated; fall back to first tool.execution_complete
+  const model =
+    toolsUpdated?.data.model ||
+    [...toolResults.values()].find((r) => r.data.model)?.data.model;
   const sessionId = resultLine?.sessionId || "unknown";
 
   const agent = buildAgent(model);

@@ -1,0 +1,11 @@
+{"type":"session.start","data":{"sessionId":"6254c2f8-ac3c-402d-8495-05b65b146837","version":1,"producer":"copilot-agent","copilotVersion":"1.0.12-0","startTime":"2026-03-25T16:29:09.644Z","context":{"cwd":"/home/user/project"}},"id":"evt-001","timestamp":"2026-03-25T16:29:10.213Z","parentId":null}
+{"type":"user.message","data":{"content":"List the files","transformedContent":"List the files","attachments":[],"interactionId":"interaction-001"},"id":"evt-002","timestamp":"2026-03-25T16:29:11.000Z","parentId":"evt-001"}
+{"type":"assistant.turn_start","data":{"turnId":"0","interactionId":"interaction-001"},"id":"evt-003","timestamp":"2026-03-25T16:29:11.100Z","parentId":"evt-002"}
+{"type":"assistant.message","data":{"messageId":"msg-001","content":"","toolRequests":[{"toolCallId":"toolu_abc123","name":"bash","arguments":{"command":"ls"},"type":"function","intentionSummary":"List files"}],"interactionId":"interaction-001","outputTokens":20},"id":"evt-004","timestamp":"2026-03-25T16:29:12.000Z","parentId":"evt-003"}
+{"type":"tool.execution_start","data":{"toolCallId":"toolu_abc123","toolName":"bash","arguments":{"command":"ls"}},"id":"evt-005","timestamp":"2026-03-25T16:29:12.001Z","parentId":"evt-004"}
+{"type":"tool.execution_complete","data":{"toolCallId":"toolu_abc123","model":"claude-opus-4.6-1m","interactionId":"interaction-001","success":true,"result":{"content":"README.md\nsrc/"}},"id":"evt-006","timestamp":"2026-03-25T16:29:13.000Z","parentId":"evt-005"}
+{"type":"assistant.turn_end","data":{"turnId":"0"},"id":"evt-007","timestamp":"2026-03-25T16:29:13.001Z","parentId":"evt-006"}
+{"type":"assistant.turn_start","data":{"turnId":"1","interactionId":"interaction-001"},"id":"evt-008","timestamp":"2026-03-25T16:29:13.002Z","parentId":"evt-007"}
+{"type":"assistant.message","data":{"messageId":"msg-002","content":"Here are the files:\n- README.md\n- src/","toolRequests":[],"interactionId":"interaction-001","outputTokens":15},"id":"evt-009","timestamp":"2026-03-25T16:29:14.000Z","parentId":"evt-008"}
+{"type":"assistant.turn_end","data":{"turnId":"1"},"id":"evt-010","timestamp":"2026-03-25T16:29:14.001Z","parentId":"evt-009"}
+{"type":"result","timestamp":"2026-03-25T16:29:15.000Z","sessionId":"6254c2f8-ac3c-402d-8495-05b65b146837","exitCode":0,"usage":{"premiumRequests":1,"totalApiDurationMs":5000,"sessionDurationMs":6000}}
