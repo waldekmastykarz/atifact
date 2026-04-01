@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0](https://github.com/waldekmastykarz/atifact/compare/v0.3.0...v0.4.0)
+
+### Features
+
+- Subagent trajectory support for Copilot CLI logs
+
 ## [0.3.0](https://github.com/waldekmastykarz/atifact/compare/v0.2.0...v0.3.0)
 
 ### Features
