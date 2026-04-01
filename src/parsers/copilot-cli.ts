@@ -92,6 +92,33 @@ interface CopilotResult {
   };
 }
 
+interface CopilotModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+interface CopilotSessionShutdown {
+  type: "session.shutdown";
+  data: {
+    modelMetrics?: Record<string, {
+      requests?: { count?: number; cost?: number };
+      usage: CopilotModelUsage;
+    }>;
+    totalPremiumRequests?: number;
+    totalApiDurationMs?: number;
+    sessionDurationMs?: number;
+    codeChanges?: {
+      linesAdded?: number;
+      linesRemoved?: number;
+      filesModified?: string[];
+    };
+    [key: string]: unknown;
+  };
+  timestamp: string;
+}
+
 type CopilotLine =
   | CopilotToolsUpdated
   | CopilotUserMessage
@@ -99,6 +126,7 @@ type CopilotLine =
   | CopilotAssistantMessageDelta
   | CopilotToolExecutionComplete
   | CopilotResult
+  | CopilotSessionShutdown
   | { type: string; [key: string]: unknown };
 
 export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
@@ -115,6 +143,10 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
   const resultLine = lines.find(
     (l) => l.type === "result"
   ) as CopilotResult | undefined;
+
+  const shutdownLine = lines.find(
+    (l) => l.type === "session.shutdown"
+  ) as CopilotSessionShutdown | undefined;
 
   // Accumulate message_delta content by messageId
   const deltaContent = new Map<string, string>();
@@ -172,7 +204,7 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
     subagentParentIds,
     subagentTrajectories
   );
-  const finalMetrics = buildFinalMetrics(resultLine, steps);
+  const finalMetrics = buildFinalMetrics(resultLine, shutdownLine, steps);
 
   const trajectory: Trajectory = {
     schema_version: "ATIF-v1.6",
@@ -443,35 +475,55 @@ function extractMetrics(outputTokens: number | undefined): Metrics | undefined {
 
 function buildFinalMetrics(
   result: CopilotResult | undefined,
+  shutdown: CopilotSessionShutdown | undefined,
   steps: Step[]
 ): FinalMetrics {
+  let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
-  for (const step of steps) {
-    if (step.metrics) {
-      totalCompletionTokens += step.metrics.completion_tokens || 0;
+  let totalCachedTokens = 0;
+
+  if (shutdown?.data.modelMetrics) {
+    // Use session.shutdown modelMetrics for accurate totals
+    for (const [, model] of Object.entries(shutdown.data.modelMetrics)) {
+      totalPromptTokens += model.usage.inputTokens + (model.usage.cacheReadTokens || 0);
+      totalCompletionTokens += model.usage.outputTokens;
+      totalCachedTokens += model.usage.cacheReadTokens || 0;
+    }
+  } else {
+    // Fallback: sum from per-step metrics
+    for (const step of steps) {
+      if (step.metrics) {
+        totalPromptTokens += step.metrics.prompt_tokens || 0;
+        totalCompletionTokens += step.metrics.completion_tokens || 0;
+        totalCachedTokens += step.metrics.cached_tokens || 0;
+      }
     }
   }
 
   const fm: FinalMetrics = {
-    total_completion_tokens: totalCompletionTokens,
+    total_prompt_tokens: totalPromptTokens || undefined,
+    total_completion_tokens: totalCompletionTokens || undefined,
+    total_cached_tokens: totalCachedTokens || undefined,
     total_steps: steps.length,
   };
 
-  if (result?.usage) {
-    fm.extra = {
-      ...(result.usage.premiumRequests !== undefined
-        ? { premium_requests: result.usage.premiumRequests }
-        : {}),
-      ...(result.usage.totalApiDurationMs !== undefined
-        ? { total_api_duration_ms: result.usage.totalApiDurationMs }
-        : {}),
-      ...(result.usage.sessionDurationMs !== undefined
-        ? { session_duration_ms: result.usage.sessionDurationMs }
-        : {}),
-      ...(result.usage.codeChanges
-        ? { code_changes: result.usage.codeChanges }
-        : {}),
-    };
+  // Gather extra metadata from result and/or shutdown
+  const extra: Record<string, unknown> = {};
+  const usage = result?.usage || shutdown?.data;
+  if (usage) {
+    const premiumRequests = result?.usage?.premiumRequests ?? (shutdown?.data.totalPremiumRequests as number | undefined);
+    const totalApiDurationMs = result?.usage?.totalApiDurationMs ?? (shutdown?.data.totalApiDurationMs as number | undefined);
+    const sessionDurationMs = result?.usage?.sessionDurationMs ?? (shutdown?.data.sessionDurationMs as number | undefined);
+    const codeChanges = result?.usage?.codeChanges ?? (shutdown?.data.codeChanges as Record<string, unknown> | undefined);
+
+    if (premiumRequests !== undefined) extra.premium_requests = premiumRequests;
+    if (totalApiDurationMs !== undefined) extra.total_api_duration_ms = totalApiDurationMs;
+    if (sessionDurationMs !== undefined) extra.session_duration_ms = sessionDurationMs;
+    if (codeChanges) extra.code_changes = codeChanges;
+  }
+
+  if (Object.keys(extra).length > 0) {
+    fm.extra = extra;
   }
 
   return fm;

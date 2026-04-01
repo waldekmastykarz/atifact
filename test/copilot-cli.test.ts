@@ -191,4 +191,39 @@ describe("parseCopilotCli", () => {
       assert.equal(subagentTrajectories, undefined);
     });
   });
+
+  describe("session.shutdown token extraction", () => {
+    it("extracts total_prompt_tokens from modelMetrics", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));
+      // (15000 + 12000) + (3000 + 1500) = 31500
+      assert.equal(t.final_metrics!.total_prompt_tokens, 31500);
+    });
+
+    it("extracts total_completion_tokens from modelMetrics", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));
+      // 80 + 200 = 280
+      assert.equal(t.final_metrics!.total_completion_tokens, 280);
+    });
+
+    it("extracts total_cached_tokens from modelMetrics", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));
+      // 12000 + 1500 = 13500
+      assert.equal(t.final_metrics!.total_cached_tokens, 13500);
+    });
+
+    it("prefers result usage for extra metadata when both exist", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));
+      assert.ok(t.final_metrics?.extra);
+      assert.equal(t.final_metrics!.extra!.premium_requests, 2);
+      assert.equal(t.final_metrics!.extra!.total_api_duration_ms, 5500);
+      assert.equal(t.final_metrics!.extra!.session_duration_ms, 10000);
+    });
+
+    it("falls back to step-level metrics when session.shutdown is missing", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
+      // No session.shutdown, so total_prompt_tokens comes from steps (which have none)
+      assert.equal(t.final_metrics!.total_prompt_tokens, undefined);
+      assert.equal(t.final_metrics!.total_completion_tokens, 77);
+    });
+  });
 });
