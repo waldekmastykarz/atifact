@@ -11,13 +11,13 @@ const fixture = (name: string) => resolve(projectRoot, "test", "fixtures", name)
 describe("parseClaudeCode", () => {
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       assert.equal(t.schema_version, "ATIF-v1.6");
       assert.equal(t.session_id, "sess-abc123");
     });
 
     it("builds the agent from init line", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       assert.equal(t.agent.name, "claude-code");
       assert.equal(t.agent.version, "1.0.0");
       assert.equal(t.agent.model_name, "claude-sonnet-4-20250514");
@@ -25,25 +25,25 @@ describe("parseClaudeCode", () => {
     });
 
     it("extracts user, agent, and tool steps in order", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const sources = t.steps.map((s) => s.source);
       assert.deepEqual(sources, ["user", "agent", "agent"]);
     });
 
     it("numbers steps sequentially starting from 1", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const ids = t.steps.map((s) => s.step_id);
       assert.deepEqual(ids, [1, 2, 3]);
     });
 
     it("extracts user message text", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const userStep = t.steps.find((s) => s.source === "user")!;
       assert.equal(userStep.message, "What files are in the current directory?");
     });
 
     it("extracts tool calls from assistant messages", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const agentWithTool = t.steps[1];
       assert.ok(agentWithTool.tool_calls);
       assert.equal(agentWithTool.tool_calls!.length, 1);
@@ -53,7 +53,7 @@ describe("parseClaudeCode", () => {
     });
 
     it("attaches observations from tool results", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const agentWithTool = t.steps[1];
       assert.ok(agentWithTool.observation);
       assert.equal(agentWithTool.observation!.results.length, 1);
@@ -64,7 +64,7 @@ describe("parseClaudeCode", () => {
     });
 
     it("extracts metrics from usage data", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       const agentStep = t.steps[1];
       assert.ok(agentStep.metrics);
       assert.equal(agentStep.metrics!.completion_tokens, 50);
@@ -72,7 +72,7 @@ describe("parseClaudeCode", () => {
     });
 
     it("computes final metrics from modelUsage", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
       assert.ok(t.final_metrics);
       assert.equal(t.final_metrics!.total_cost_usd, 0.005);
       assert.equal(t.final_metrics!.total_steps, 3);
@@ -81,7 +81,7 @@ describe("parseClaudeCode", () => {
 
   describe("subagent filtering", () => {
     it("skips subagent (parent_tool_use_id) messages", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-subagent.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-subagent.jsonl"));
       // Should have: user, agent (with tool), agent (final)
       // The subagent message (parent_tool_use_id = "toolu_010") should be skipped
       const agentSteps = t.steps.filter((s) => s.source === "agent");
@@ -92,14 +92,14 @@ describe("parseClaudeCode", () => {
     });
 
     it("includes agents in agent extra when present", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-subagent.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-subagent.jsonl"));
       assert.deepEqual(t.agent.extra?.agents, ["task"]);
     });
   });
 
   describe("cache creation tokens", () => {
     it("includes cache_creation_input_tokens in prompt_tokens", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
       const agentStep = t.steps.find(
         (s) => s.source === "agent" && s.tool_calls && s.tool_calls.length > 0
       )!;
@@ -108,7 +108,7 @@ describe("parseClaudeCode", () => {
     });
 
     it("sets metrics.extra with cache_creation_input_tokens", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
       const agentStep = t.steps.find(
         (s) => s.source === "agent" && s.tool_calls && s.tool_calls.length > 0
       )!;
@@ -117,7 +117,7 @@ describe("parseClaudeCode", () => {
     });
 
     it("sets cached_tokens from cache_read_input_tokens", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
       const agentStep = t.steps.find(
         (s) => s.source === "agent" && s.tool_calls && s.tool_calls.length > 0
       )!;
@@ -127,7 +127,7 @@ describe("parseClaudeCode", () => {
 
   describe("final metrics fallback", () => {
     it("sums from steps when modelUsage is absent", async () => {
-      const t = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
       // The fixture has no modelUsage in the result line, so it should sum from steps
       assert.ok(t.final_metrics);
       assert.ok(t.final_metrics!.total_prompt_tokens! > 0);

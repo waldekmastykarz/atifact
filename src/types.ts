@@ -95,6 +95,13 @@ export interface FinalMetrics {
   extra?: Record<string, unknown>;
 }
 
+// Parser result type — supports multi-file output for subagent trajectories
+
+export interface ParseResult {
+  trajectory: Trajectory;
+  subagentTrajectories?: Map<string, Trajectory>;
+}
+
 // Input format types
 
 export type InputFormat = "har" | "claude-code-jsonl" | "copilot-cli-jsonl";

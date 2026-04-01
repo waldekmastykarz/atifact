@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve, basename, extname } from "node:path";
+import { resolve, basename, dirname } from "node:path";
 import { createRequire } from "node:module";
 import { detectFormat } from "./detect.js";
 import { parseHar } from "./parsers/har.js";
 import { parseClaudeCode } from "./parsers/claude-code.js";
 import { parseCopilotCli } from "./parsers/copilot-cli.js";
-import type { InputFormat, Trajectory } from "./types.js";
+import type { InputFormat, ParseResult } from "./types.js";
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require("../../package.json");
@@ -31,10 +31,13 @@ ARGUMENTS
   <input-file>    Path to the input file (.har or .jsonl)
 
 OPTIONS
-  -o, --output <path>   Output file path (default: <input>.trajectory.json)
+  -o, --output <prefix>   Output path prefix (default: <input>)
+                           Main trajectory:  <prefix>.trajectory.json
+                           Subagent files:   <prefix>.trajectory.<name>.json
   -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl
                         (auto-detected if omitted)
-      --json            Write JSON output to stdout instead of file
+      --json            Write main trajectory JSON to stdout instead of file
+                        (subagent trajectories are still written to files)
   -q, --quiet           Suppress progress messages (stderr only)
   -h, --help            Show this help
       --version         Print version
@@ -47,10 +50,11 @@ SUPPORTED INPUT FORMATS
 
 EXAMPLES
   atifact session.har                          Convert, write to session.trajectory.json
-  atifact session.har -o out.json              Explicit output path
+  atifact session.har -o out                   Write to out.trajectory.json
   atifact session.har --json | jq '.steps | length'   Pipe step count
   atifact session.har --json --quiet           JSON to stdout, no diagnostics
   atifact claude-log.jsonl -f claude-code-jsonl        Force format
+  atifact copilot.jsonl                        Write main + subagent trajectory files
 
 JSON OUTPUT SCHEMA (ATIF v1.6)
   {
@@ -67,7 +71,8 @@ JSON OUTPUT SCHEMA (ATIF v1.6)
       "reasoning_effort": "string (agent steps only, e.g. low/medium/high)",
       "reasoning_content": "string (agent thinking/CoT)",
       "tool_calls": [{ "tool_call_id": "string", "function_name": "string", "arguments": {} }],
-      "observation": { "results": [{ "source_call_id": "string", "content": "string" }] },
+      "observation": { "results": [{ "source_call_id": "string", "content": "string",
+                       "subagent_trajectory_ref": [{ "session_id": "string", "trajectory_path": "string" }] }] },
       "metrics": { "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0 }
     }],
     "final_metrics": { "total_prompt_tokens": 0, "total_completion_tokens": 0,
@@ -77,6 +82,8 @@ JSON OUTPUT SCHEMA (ATIF v1.6)
 
 OUTPUT
   Primary output (ATIF JSON) goes to file or stdout (--json).
+  Subagent trajectories are written as separate files next to the main trajectory.
+  The --output prefix controls the base path for all output files.
   Diagnostics and progress go to stderr.
 
 EXIT CODES
@@ -170,9 +177,8 @@ function parseArgs(argv: string[]): CliOptions {
   }
 
   if (!output && !json) {
-    // Default output filename
-    const base = basename(input, extname(input));
-    output = resolve(process.cwd(), `${base}.trajectory.json`);
+    // Default output prefix: input file path (e.g., session.jsonl → session.trajectory.json)
+    output = resolve(process.cwd(), input);
   }
 
   return { input: resolve(input), output, format, json, quiet };
@@ -233,18 +239,18 @@ async function main(): Promise<void> {
 
   // Parse
   log(opts.quiet, `Parsing ${inputFormat}...`);
-  let trajectory: Trajectory;
+  let result: ParseResult;
 
   try {
     switch (inputFormat) {
       case "har":
-        trajectory = await parseHar(opts.input);
+        result = await parseHar(opts.input);
         break;
       case "claude-code-jsonl":
-        trajectory = await parseClaudeCode(opts.input);
+        result = await parseClaudeCode(opts.input);
         break;
       case "copilot-cli-jsonl":
-        trajectory = await parseCopilotCli(opts.input);
+        result = await parseCopilotCli(opts.input);
         break;
       default:
         process.stderr.write(
@@ -261,22 +267,63 @@ async function main(): Promise<void> {
     return;
   }
 
+  const { trajectory, subagentTrajectories } = result;
+
+  // Write subagent trajectory files and set trajectory_path references
+  if (subagentTrajectories && subagentTrajectories.size > 0) {
+    const outputPrefix = opts.json
+      ? resolve(dirname(opts.input), basename(opts.input))
+      : opts.output;
+
+    for (const [parentId, subTrajectory] of subagentTrajectories) {
+      // Derive file-safe name from session_id (last segment after ":")
+      const namePart = subTrajectory.session_id.includes(":")
+        ? subTrajectory.session_id.split(":").pop()!
+        : parentId;
+      const safeName = namePart.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const subFilename = `${basename(outputPrefix)}.trajectory.${safeName}.json`;
+      const subPath = resolve(dirname(outputPrefix), subFilename);
+
+      // Set trajectory_path on the matching subagent_trajectory_ref in parent trajectory
+      for (const step of trajectory.steps) {
+        if (!step.observation) continue;
+        for (const obs of step.observation.results) {
+          if (!obs.subagent_trajectory_ref) continue;
+          for (const ref of obs.subagent_trajectory_ref) {
+            if (ref.session_id === subTrajectory.session_id) {
+              ref.trajectory_path = subFilename;
+            }
+          }
+        }
+      }
+
+      // Write subagent file
+      const subCleaned = stripUndefined(subTrajectory);
+      await writeFile(subPath, JSON.stringify(subCleaned, null, 2) + "\n", "utf-8");
+      log(opts.quiet, `Wrote subagent: ${subPath}`);
+    }
+  }
+
   const cleaned = stripUndefined(trajectory);
   const jsonOutput = JSON.stringify(cleaned, null, 2);
 
-  // Output
+  // Output main trajectory
   if (opts.json) {
     process.stdout.write(jsonOutput);
     process.stdout.write("\n");
   } else {
-    await writeFile(opts.output, jsonOutput + "\n", "utf-8");
-    log(opts.quiet, `Wrote ${opts.output}`);
+    const mainPath = `${opts.output}.trajectory.json`;
+    await writeFile(mainPath, jsonOutput + "\n", "utf-8");
+    log(opts.quiet, `Wrote ${mainPath}`);
   }
 
   log(
     opts.quiet,
     `Done. ${trajectory.steps.length} steps, ` +
-      `${trajectory.steps.filter((s) => s.source === "agent").length} agent turns`
+      `${trajectory.steps.filter((s) => s.source === "agent").length} agent turns` +
+      (subagentTrajectories && subagentTrajectories.size > 0
+        ? `, ${subagentTrajectories.size} subagent trajectories`
+        : "")
   );
 }
 

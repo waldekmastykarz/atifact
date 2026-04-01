@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type {
   Trajectory,
+  ParseResult,
   Step,
   ToolCall,
   Observation,
@@ -106,7 +107,7 @@ type ClaudeCodeLine =
   | ClaudeCodeResult
   | { type: string; [key: string]: unknown };
 
-export async function parseClaudeCode(filePath: string): Promise<Trajectory> {
+export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
   const lines = raw
     .trim()
@@ -130,12 +131,14 @@ export async function parseClaudeCode(filePath: string): Promise<Trajectory> {
   const finalMetrics = buildFinalMetrics(resultLine, steps);
 
   return {
-    schema_version: "ATIF-v1.6",
-    session_id: initLine.session_id,
-    agent,
-    steps,
-    final_metrics: finalMetrics,
-    notes: `Converted from Claude Code CLI logs: ${filePath}`,
+    trajectory: {
+      schema_version: "ATIF-v1.6",
+      session_id: initLine.session_id,
+      agent,
+      steps,
+      final_metrics: finalMetrics,
+      notes: `Converted from Claude Code CLI logs: ${filePath}`,
+    },
   };
 }
 

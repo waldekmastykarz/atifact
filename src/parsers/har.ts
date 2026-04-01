@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type {
   Trajectory,
+  ParseResult,
   Step,
   ToolCall,
   Observation,
@@ -44,7 +45,7 @@ interface ParsedExchange {
   requestHeaders: Record<string, string>;
 }
 
-export async function parseHar(filePath: string): Promise<Trajectory> {
+export async function parseHar(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
   const har: HarFile = JSON.parse(raw);
 
@@ -60,12 +61,14 @@ export async function parseHar(filePath: string): Promise<Trajectory> {
   const finalMetrics = computeFinalMetrics(steps);
 
   return {
-    schema_version: "ATIF-v1.6",
-    session_id: generateSessionId(har),
-    agent,
-    steps,
-    final_metrics: finalMetrics,
-    notes: `Converted from HAR file: ${filePath}`,
+    trajectory: {
+      schema_version: "ATIF-v1.6",
+      session_id: generateSessionId(har),
+      agent,
+      steps,
+      final_metrics: finalMetrics,
+      notes: `Converted from HAR file: ${filePath}`,
+    },
   };
 }
 

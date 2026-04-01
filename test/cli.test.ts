@@ -101,15 +101,16 @@ describe("CLI integration", () => {
 
   it("writes output to file by default", async () => {
     const input = fixture("claude-code-simple.jsonl");
-    const expectedOutput = resolve(
+    const outputPrefix = resolve(
       projectRoot,
       "test",
       "fixtures",
-      "claude-code-simple.trajectory.json"
+      "claude-code-simple-test-output"
     );
+    const expectedOutput = `${outputPrefix}.trajectory.json`;
 
     try {
-      await exec("node", [cli, input, "-o", expectedOutput, "--quiet"]);
+      await exec("node", [cli, input, "-o", outputPrefix, "--quiet"]);
       const content = await readFile(expectedOutput, "utf-8");
       const trajectory = JSON.parse(content);
       assert.equal(trajectory.schema_version, "ATIF-v1.6");
@@ -191,6 +192,58 @@ describe("CLI integration", () => {
     } catch (err: unknown) {
       const e = err as { code: number; stderr: string };
       assert.equal(e.code, 1);
+    }
+  });
+
+  it("writes subagent trajectories as separate files", async () => {
+    const input = fixture("copilot-cli-subagent.jsonl");
+    const outputPrefix = resolve(
+      projectRoot,
+      "test",
+      "fixtures",
+      "cli-subagent-test"
+    );
+    const mainFile = `${outputPrefix}.trajectory.json`;
+    const subFile = `${outputPrefix}.trajectory.explore-files.json`;
+
+    try {
+      await exec("node", [cli, input, "-o", outputPrefix, "--quiet"]);
+
+      // Main trajectory should exist and reference the subagent
+      const mainContent = await readFile(mainFile, "utf-8");
+      const main = JSON.parse(mainContent);
+      assert.equal(main.schema_version, "ATIF-v1.6");
+
+      // Find the subagent ref in the main trajectory
+      let foundRef = false;
+      for (const step of main.steps) {
+        if (!step.observation) continue;
+        for (const obs of step.observation.results) {
+          if (obs.subagent_trajectory_ref) {
+            assert.equal(
+              obs.subagent_trajectory_ref[0].trajectory_path,
+              "cli-subagent-test.trajectory.explore-files.json"
+            );
+            foundRef = true;
+          }
+        }
+      }
+      assert.ok(foundRef, "Should have a subagent_trajectory_ref");
+
+      // Subagent trajectory file should exist
+      const subContent = await readFile(subFile, "utf-8");
+      const sub = JSON.parse(subContent);
+      assert.equal(sub.schema_version, "ATIF-v1.6");
+      assert.equal(sub.agent.model_name, "gpt-5.4-mini");
+      assert.ok(sub.steps.length > 0);
+    } finally {
+      for (const f of [mainFile, subFile]) {
+        try {
+          await unlink(f);
+        } catch {
+          // cleanup best-effort
+        }
+      }
     }
   });
 });

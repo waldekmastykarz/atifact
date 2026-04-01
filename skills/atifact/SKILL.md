@@ -35,16 +35,23 @@ Format is auto-detected from file contents (not extension). Use `--format` / `-f
 
 ### Basic conversion
 
-Output file defaults to `<input>.trajectory.json`:
+The `--output` / `-o` option takes a **prefix**, not a filename. Output files are derived from the prefix:
+- Main trajectory: `<prefix>.trajectory.json`
+- Subagent trajectories: `<prefix>.trajectory.<name>.json`
+
+Default prefix is the input file path:
 
 ```bash
 atifact session.har
+# Writes: session.har.trajectory.json
 ```
 
-### Specify output path
+### Specify output prefix
 
 ```bash
-atifact session.har -o trajectory.json
+atifact session.har -o out
+# Writes: out.trajectory.json
+# If subagents exist: out.trajectory.<name>.json
 ```
 
 ### Force input format
@@ -58,7 +65,7 @@ atifact session.jsonl -f copilot-cli-jsonl
 
 ### Pipe JSON to stdout
 
-Use `--json` with `--quiet` to suppress diagnostics and get clean JSON on stdout:
+Use `--json` with `--quiet` to suppress diagnostics and get clean JSON on stdout. Subagent trajectory files are still written to disk alongside the input file.
 
 ```bash
 atifact session.har --json --quiet
@@ -75,9 +82,9 @@ atifact session.har --json --quiet | jq '.steps | length'
 | Option | Alias | Description |
 |--------|-------|-------------|
 | `<input-file>` | | Path to the input file (required) |
-| `--output` | `-o` | Output file path (default: `<input>.trajectory.json`) |
+| `--output` | `-o` | Output path prefix. Main: `<prefix>.trajectory.json`, subagents: `<prefix>.trajectory.<name>.json` (default: input file path) |
 | `--format` | `-f` | Force input format: `har`, `claude-code-jsonl`, `copilot-cli-jsonl` |
-| `--json` | | Write JSON output to stdout instead of file |
+| `--json` | | Write main trajectory JSON to stdout instead of file (subagent files still written to disk) |
 | `--quiet` | `-q` | Suppress progress messages (stderr only) |
 
 ## Exit codes
@@ -92,8 +99,8 @@ atifact session.har --json --quiet | jq '.steps | length'
 
 1. Identify the input file and its format (HAR or JSONL).
 2. For `.jsonl` files, determine the source (Claude Code or Copilot CLI) to use the correct `--format` if auto-detection fails.
-3. Run `atifact` with the input file. Use `-o` to place the output trajectory file in the same directory as the source file (e.g., `atifact /path/to/session.har -o /path/to/session.har.trajectory.json`).
-4. Report the output file path and key metrics (total steps, total cost) from the generated trajectory.
+3. Run `atifact` with the input file. Use `-o` to set the output prefix (e.g., `atifact /path/to/session.har -o /path/to/session`). The main trajectory is written to `<prefix>.trajectory.json`.
+4. Report the output file path(s) and key metrics (total steps, total cost) from the generated trajectory.
 
 ## Notes
 
@@ -101,4 +108,5 @@ atifact session.har --json --quiet | jq '.steps | length'
 - Multi-turn HAR conversations are deduplicated (each request carries full history).
 - Utility calls (e.g., gpt-4o-mini title generation) are excluded from the trajectory.
 - Tool results from request N are attached as observations to the agent step from request N-1.
+- Copilot CLI logs with subagent `task` tool calls produce separate trajectory files per subagent. The main trajectory references them via `subagent_trajectory_ref` with `trajectory_path` pointing to the sibling file.
 - All timestamps are preserved from source data as-is (ISO 8601).
