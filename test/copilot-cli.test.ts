@@ -192,6 +192,18 @@ describe("parseCopilotCli", () => {
     });
   });
 
+  describe("session_id extraction", () => {
+    it("extracts session_id from result event", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
+      assert.equal(t.session_id, "session-xyz-789");
+    });
+
+    it("falls back to session.start when result event is missing", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-no-result.jsonl"));
+      assert.equal(t.session_id, "start-only-session-001");
+    });
+  });
+
   describe("session.shutdown token extraction", () => {
     it("extracts total_prompt_tokens from modelMetrics", async () => {
       const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));

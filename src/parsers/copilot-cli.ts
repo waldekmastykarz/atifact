@@ -12,6 +12,15 @@ import type {
 
 // --- Copilot CLI JSONL event types ---
 
+interface CopilotSessionStart {
+  type: "session.start";
+  data: {
+    sessionId: string;
+    [key: string]: unknown;
+  };
+  timestamp: string;
+}
+
 interface CopilotToolsUpdated {
   type: "session.tools_updated";
   data: { model: string };
@@ -120,6 +129,7 @@ interface CopilotSessionShutdown {
 }
 
 type CopilotLine =
+  | CopilotSessionStart
   | CopilotToolsUpdated
   | CopilotUserMessage
   | CopilotAssistantMessage
@@ -135,6 +145,10 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as CopilotLine);
+
+  const sessionStart = lines.find(
+    (l) => l.type === "session.start"
+  ) as CopilotSessionStart | undefined;
 
   const toolsUpdated = lines.find(
     (l) => l.type === "session.tools_updated"
@@ -173,7 +187,7 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
     [...toolResults.values()].find(
       (r) => r.data.model && !r.data.parentToolCallId
     )?.data.model;
-  const sessionId = resultLine?.sessionId || "unknown";
+  const sessionId = resultLine?.sessionId || sessionStart?.data.sessionId || "unknown";
 
   // Collect subagent parentToolCallIds
   const subagentParentIds = new Set<string>();

@@ -1,0 +1,6 @@
+{"type":"session.start","data":{"sessionId":"start-only-session-001","version":1,"producer":"copilot-agent","copilotVersion":"1.0.12-0","startTime":"2026-03-25T16:29:09.644Z","context":{"cwd":"/home/user/project"}},"id":"evt-001","timestamp":"2026-03-25T16:29:10.213Z","parentId":null}
+{"type":"session.tools_updated","data":{"model":"claude-sonnet-4.6"},"id":"evt-002","timestamp":"2026-03-25T16:29:10.500Z","parentId":"evt-001","ephemeral":true}
+{"type":"user.message","data":{"content":"Hello","transformedContent":"Hello","attachments":[],"interactionId":"interaction-001"},"id":"evt-003","timestamp":"2026-03-25T16:29:11.000Z","parentId":"evt-001"}
+{"type":"assistant.turn_start","data":{"turnId":"0","interactionId":"interaction-001"},"id":"evt-004","timestamp":"2026-03-25T16:29:11.100Z","parentId":"evt-003"}
+{"type":"assistant.message","data":{"messageId":"msg-001","content":"Hi there! How can I help?","toolRequests":[],"interactionId":"interaction-001","outputTokens":10},"id":"evt-005","timestamp":"2026-03-25T16:29:12.000Z","parentId":"evt-004"}
+{"type":"assistant.turn_end","data":{"turnId":"0"},"id":"evt-006","timestamp":"2026-03-25T16:29:12.100Z","parentId":"evt-005"}
