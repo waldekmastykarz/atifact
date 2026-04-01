@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/waldekmastykarz/atifact/compare/v0.5.0...v0.6.0)
+
+### Features
+
+- Extract token usage metrics from Copilot CLI session shutdown events
+
+### Bug Fixes
+
+- Correctly extract session ID from Copilot CLI session start events
+
 ## [0.5.0](https://github.com/waldekmastykarz/atifact/compare/v0.4.0...v0.5.0)
 
 ### Breaking Changes
