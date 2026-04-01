@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/waldekmastykarz/atifact/compare/v0.4.0...v0.5.0)
+
+### Breaking Changes
+
+- `--json` now outputs a JSON array of trajectories (main first, subagents after) instead of a single object
+
+### Features
+
+- `--json` mode writes no files — pure stdout output
+- Subagent trajectories included in `--json` array output
+
 ## [0.4.0](https://github.com/waldekmastykarz/atifact/compare/v0.3.0...v0.4.0)
 
 ### Features
