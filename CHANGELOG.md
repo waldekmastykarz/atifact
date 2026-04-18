@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1](https://github.com/waldekmastykarz/atifact/compare/v0.6.0...v0.6.1)
+
+### Bug Fixes
+
+- Fix ATIF trajectory format spec link
+
 ## [0.6.0](https://github.com/waldekmastykarz/atifact/compare/v0.5.0...v0.6.0)
 
 ### Features
