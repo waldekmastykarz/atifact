@@ -2,7 +2,7 @@
 
 Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-format) trajectories. One command. Zero dependencies.
 
-Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/docs/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
+Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
 ## Use with AI agents
 
@@ -80,7 +80,7 @@ atifact <input-file> [options]
 
 ## Output format
 
-atifact produces [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/docs/rfcs/0001-trajectory-format.md) JSON with:
+atifact produces [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) JSON with:
 
 - **Steps** — user messages, agent responses, tool calls, and observations
 - **Metrics** — token counts, costs, cached tokens per step

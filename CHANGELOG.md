@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0](https://github.com/waldekmastykarz/atifact/compare/v0.6.0...v0.7.0)
+
+### Documentation
+
+- Updated ATIF v1.6 trajectory format RFC link to remove `docs/` from the path
+
 ## [0.6.0](https://github.com/waldekmastykarz/atifact/compare/v0.5.0...v0.6.0)
 
 ### Features
