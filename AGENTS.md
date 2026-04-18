@@ -4,7 +4,7 @@
 
 The canonical source for the current ATIF spec version is the RFC on GitHub:
 
-<https://github.com/harbor-framework/harbor/blob/main/docs/rfcs/0001-trajectory-format.md>
+<https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md>
 
 **Do NOT use** the Harbor docs website (`harborframework.com/docs/agents/trajectory-format`) for version checks — it lags behind the RFC and may show an outdated version.
 
