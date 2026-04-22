@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.2](https://github.com/waldekmastykarz/atifact/compare/v0.6.1...v0.6.2)
+
+### Bug Fixes
+
+- Fix overly broad utility call filtering that could discard legitimate OpenAI Chat API exchanges
+
 ## [0.6.1](https://github.com/waldekmastykarz/atifact/compare/v0.6.0...v0.6.1)
 
 ### Bug Fixes
