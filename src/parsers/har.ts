@@ -285,11 +285,7 @@ function buildSteps(exchanges: ParsedExchange[]): Step[] {
   const utilityExchanges: ParsedExchange[] = [];
 
   for (const ex of exchanges) {
-    if (
-      ex.model.includes("mini") ||
-      ex.model.includes("small") ||
-      ex.apiFormat === "openai-chat"
-    ) {
+    if (ex.model.includes("mini") || ex.model.includes("small")) {
       // Only mark as utility if it looks like a utility call (short messages, title gen)
       const messages = (ex.request.messages || ex.request.input) as unknown[];
       if (Array.isArray(messages) && messages.length <= 3) {
