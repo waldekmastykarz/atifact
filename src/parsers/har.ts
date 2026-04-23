@@ -317,8 +317,17 @@ function buildSteps(exchanges: ParsedExchange[]): Step[] {
     // Attach tool results from this request to the PREVIOUS agent step
     if (prevAgentStep) {
       const observations = extractToolResultsFromRequest(exchange);
-      if (observations.length > 0) {
-        prevAgentStep.observation = { results: observations };
+      // Only keep results whose source_call_id matches a tool_call in this step
+      // (requests replay the full conversation history, so we must filter out
+      // results from earlier rounds)
+      const prevToolCallIds = new Set(
+        (prevAgentStep.tool_calls || []).map((tc) => tc.tool_call_id)
+      );
+      const relevant = observations.filter(
+        (o) => o.source_call_id && prevToolCallIds.has(o.source_call_id)
+      );
+      if (relevant.length > 0) {
+        prevAgentStep.observation = { results: relevant };
       }
     }
 

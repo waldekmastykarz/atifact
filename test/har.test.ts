@@ -187,6 +187,18 @@ describe("parseHar — multi-turn deduplication", () => {
     );
   });
 
+  it("does not attach replayed tool results to agent steps without matching tool calls", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-anthropic-multiturn.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    // Second agent step has no tool_calls — it must not get observations
+    // from replayed history containing toolu_call_01
+    assert.equal(agentSteps[1].tool_calls, undefined);
+    assert.equal(agentSteps[1].observation, undefined);
+    // Third agent step also has no tool_calls
+    assert.equal(agentSteps[2].tool_calls, undefined);
+    assert.equal(agentSteps[2].observation, undefined);
+  });
+
   it("extracts new user message from third exchange", async () => {
     const { trajectory: t } = await parseHar(fixture("har-anthropic-multiturn.har"));
     const userSteps = t.steps.filter((s) => s.source === "user");
