@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.3](https://github.com/waldekmastykarz/atifact/compare/v0.6.2...v0.6.3)
+
+### Bug Fixes
+
+- Fix HAR parser attaching replayed tool results to agent steps that don't own those tool calls
+
 ## [0.6.2](https://github.com/waldekmastykarz/atifact/compare/v0.6.1...v0.6.2)
 
 ### Bug Fixes
