@@ -14,6 +14,11 @@ describe("detectFormat", () => {
     assert.equal(result.format, "claude-code-jsonl");
   });
 
+  it("detects Claude Code JSONL with rate_limit_event prefix", async () => {
+    const result = await detectFormat(fixture("claude-code-rate-limit-prefix.jsonl"));
+    assert.equal(result.format, "claude-code-jsonl");
+  });
+
   it("detects HAR (Anthropic)", async () => {
     const result = await detectFormat(fixture("har-anthropic.har"));
     assert.equal(result.format, "har");

@@ -144,4 +144,19 @@ describe("parseClaudeCode", () => {
       );
     });
   });
+
+  describe("rate_limit_event prefix", () => {
+    it("parses when init line is not the first line", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-rate-limit-prefix.jsonl"));
+      assert.equal(t.schema_version, "ATIF-v1.6");
+      assert.equal(t.session_id, "sess-abc123");
+      assert.equal(t.agent.name, "claude-code");
+    });
+
+    it("produces the same steps as the simple fixture", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-rate-limit-prefix.jsonl"));
+      const sources = t.steps.map((s) => s.source);
+      assert.deepEqual(sources, ["user", "agent", "agent"]);
+    });
+  });
 });
