@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.4](https://github.com/waldekmastykarz/atifact/compare/v0.6.3...v0.6.4)
+
+### Bug Fixes
+
+- Fix Claude Code JSONL detection failing when the file starts with non-init lines (e.g. `rate_limit_event`)
+
 ## [0.6.3](https://github.com/waldekmastykarz/atifact/compare/v0.6.2...v0.6.3)
 
 ### Bug Fixes
