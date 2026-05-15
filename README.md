@@ -1,5 +1,7 @@
 # atifact
 
+[![skills.sh](https://skills.sh/b/waldekmastykarz/atifact)](https://skills.sh/waldekmastykarz/atifact)
+
 Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-format) trajectories. One command. Zero dependencies.
 
 Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
