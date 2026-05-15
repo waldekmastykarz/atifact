@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0](https://github.com/waldekmastykarz/atifact/compare/v0.6.4...v0.7.0)
+
+### Features
+
+- Upgrade to ATIF v1.7 trajectory format
+
 ## [0.6.4](https://github.com/waldekmastykarz/atifact/compare/v0.6.3...v0.6.4)
 
 ### Bug Fixes
