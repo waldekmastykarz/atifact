@@ -67,12 +67,11 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectories = JSON.parse(stdout);
-    assert.ok(Array.isArray(trajectories));
-    assert.equal(trajectories.length, 1);
-    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
-    assert.equal(trajectories[0].session_id, "sess-abc123");
-    assert.ok(trajectories[0].steps.length > 0);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(typeof trajectory, "object");
+    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.session_id, "sess-abc123");
+    assert.ok(trajectory.steps.length > 0);
   });
 
   it("converts HAR to ATIF with --json", async () => {
@@ -82,11 +81,10 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectories = JSON.parse(stdout);
-    assert.ok(Array.isArray(trajectories));
-    assert.equal(trajectories.length, 1);
-    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
-    assert.ok(trajectories[0].steps.length > 0);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(typeof trajectory, "object");
+    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.ok(trajectory.steps.length > 0);
   });
 
   it("converts Copilot CLI JSONL to ATIF with --json", async () => {
@@ -96,13 +94,12 @@ describe("CLI integration", () => {
       "--json",
       "--quiet",
     ]);
-    const trajectories = JSON.parse(stdout);
-    assert.ok(Array.isArray(trajectories));
-    assert.equal(trajectories.length, 1);
-    assert.equal(trajectories[0].schema_version, "ATIF-v1.6");
-    assert.equal(trajectories[0].session_id, "session-xyz-789");
-    assert.equal(trajectories[0].agent.name, "copilot-cli");
-    assert.ok(trajectories[0].steps.length > 0);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(typeof trajectory, "object");
+    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.session_id, "session-xyz-789");
+    assert.equal(trajectory.agent.name, "copilot-cli");
+    assert.ok(trajectory.steps.length > 0);
   });
 
   it("writes output to file by default", async () => {
@@ -119,7 +116,7 @@ describe("CLI integration", () => {
       await exec("node", [cli, input, "-o", outputPrefix, "--quiet"]);
       const content = await readFile(expectedOutput, "utf-8");
       const trajectory = JSON.parse(content);
-      assert.equal(trajectory.schema_version, "ATIF-v1.6");
+      assert.equal(trajectory.schema_version, "ATIF-v1.7");
     } finally {
       try {
         await unlink(expectedOutput);
@@ -139,7 +136,7 @@ describe("CLI integration", () => {
       "claude-code-jsonl",
     ]);
     const trajectories = JSON.parse(stdout);
-    assert.equal(trajectories[0].agent.name, "claude-code");
+    assert.equal(trajectories.agent.name, "claude-code");
   });
 
   it("strips undefined/null fields from output", async () => {
@@ -218,7 +215,7 @@ describe("CLI integration", () => {
       // Main trajectory should exist and reference the subagent
       const mainContent = await readFile(mainFile, "utf-8");
       const main = JSON.parse(mainContent);
-      assert.equal(main.schema_version, "ATIF-v1.6");
+      assert.equal(main.schema_version, "ATIF-v1.7");
 
       // Find the subagent ref in the main trajectory
       let foundRef = false;
@@ -239,7 +236,7 @@ describe("CLI integration", () => {
       // Subagent trajectory file should exist
       const subContent = await readFile(subFile, "utf-8");
       const sub = JSON.parse(subContent);
-      assert.equal(sub.schema_version, "ATIF-v1.6");
+      assert.equal(sub.schema_version, "ATIF-v1.7");
       assert.equal(sub.agent.model_name, "gpt-5.4-mini");
       assert.ok(sub.steps.length > 0);
     } finally {
@@ -253,20 +250,22 @@ describe("CLI integration", () => {
     }
   });
 
-  it("outputs subagent trajectories in --json array", async () => {
+  it("embeds subagent trajectories in --json output", async () => {
     const { stdout } = await exec("node", [
       cli,
       fixture("copilot-cli-subagent.jsonl"),
       "--json",
       "--quiet",
     ]);
-    const trajectories = JSON.parse(stdout);
-    assert.ok(Array.isArray(trajectories));
-    assert.equal(trajectories.length, 2);
-    // First is main trajectory
-    assert.equal(trajectories[0].agent.model_name, "claude-opus-4.6-1m");
-    // Second is subagent
-    assert.equal(trajectories[1].agent.model_name, "gpt-5.4-mini");
-    assert.ok(trajectories[1].steps.length > 0);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(typeof trajectory, "object");
+    assert.equal(trajectory.agent.model_name, "claude-opus-4.6-1m");
+    // Subagents should be embedded in subagent_trajectories
+    assert.ok(Array.isArray(trajectory.subagent_trajectories));
+    assert.equal(trajectory.subagent_trajectories.length, 1);
+    const sub = trajectory.subagent_trajectories[0];
+    assert.equal(sub.agent.model_name, "gpt-5.4-mini");
+    assert.equal(sub.trajectory_id, "task_explore_001");
+    assert.ok(sub.steps.length > 0);
   });
 });

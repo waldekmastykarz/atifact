@@ -12,7 +12,7 @@ describe("parseCopilotCli", () => {
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.6");
+      assert.equal(t.schema_version, "ATIF-v1.7");
       assert.equal(t.session_id, "session-xyz-789");
     });
 
@@ -147,8 +147,12 @@ describe("parseCopilotCli", () => {
       assert.ok(taskObs);
       assert.ok(taskObs!.subagent_trajectory_ref);
       assert.equal(taskObs!.subagent_trajectory_ref!.length, 1);
+      assert.equal(
+        taskObs!.subagent_trajectory_ref![0].trajectory_id,
+        "task_explore_001"
+      );
       assert.ok(
-        taskObs!.subagent_trajectory_ref![0].session_id.includes("explore-files")
+        taskObs!.subagent_trajectory_ref![0].session_id!.includes("explore-files")
       );
     });
 
@@ -184,6 +188,12 @@ describe("parseCopilotCli", () => {
       assert.equal(sub.steps.length, 2);
       assert.equal(sub.steps[0].step_id, 1);
       assert.equal(sub.steps[1].step_id, 2);
+    });
+
+    it("sets trajectory_id on subagent trajectories", async () => {
+      const { subagentTrajectories } = await parseCopilotCli(fixture("copilot-cli-subagent.jsonl"));
+      const sub = subagentTrajectories!.get("task_explore_001")!;
+      assert.equal(sub.trajectory_id, "task_explore_001");
     });
 
     it("does not return subagentTrajectories when none exist", async () => {

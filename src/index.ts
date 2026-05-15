@@ -36,8 +36,8 @@ OPTIONS
                            Subagent files:   <prefix>.trajectory.<name>.json
   -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl
                         (auto-detected if omitted)
-      --json            Write JSON array of trajectories to stdout (no files written)
-                        Array contains main trajectory first, then subagent trajectories
+      --json            Write trajectory to stdout with subagents embedded in
+                        subagent_trajectories (no files written)
   -q, --quiet           Suppress progress messages (stderr only)
   -h, --help            Show this help
       --version         Print version
@@ -51,15 +51,16 @@ SUPPORTED INPUT FORMATS
 EXAMPLES
   atifact session.har                          Convert, write to session.trajectory.json
   atifact session.har -o out                   Write to out.trajectory.json
-  atifact session.har --json | jq '.[0].steps | length'   Pipe step count
-  atifact session.har --json --quiet           JSON array to stdout, no diagnostics
+  atifact session.har --json | jq '.steps | length'      Pipe step count
+  atifact session.har --json --quiet           JSON to stdout, no diagnostics
   atifact claude-log.jsonl -f claude-code-jsonl        Force format
   atifact copilot.jsonl                        Write main + subagent trajectory files
 
-JSON OUTPUT SCHEMA (ATIF v1.6)
+JSON OUTPUT SCHEMA (ATIF v1.7)
   {
-    "schema_version": "ATIF-v1.6",
-    "session_id": "string",
+    "schema_version": "ATIF-v1.7",
+    "session_id": "string (optional, run-scoped)",
+    "trajectory_id": "string (optional, per-document unique)",
     "agent": { "name": "string", "version": "string", "model_name": "string",
                "tool_definitions": [{ "type": "function", "function": { "name", "description", "parameters" } }] },
     "steps": [{
@@ -70,21 +71,27 @@ JSON OUTPUT SCHEMA (ATIF v1.6)
       "model_name": "string (agent steps only)",
       "reasoning_effort": "string (agent steps only, e.g. low/medium/high)",
       "reasoning_content": "string (agent thinking/CoT)",
-      "tool_calls": [{ "tool_call_id": "string", "function_name": "string", "arguments": {} }],
+      "tool_calls": [{ "tool_call_id": "string", "function_name": "string", "arguments": {},
+                       "extra": {} }],
       "observation": { "results": [{ "source_call_id": "string", "content": "string",
-                       "subagent_trajectory_ref": [{ "session_id": "string", "trajectory_path": "string" }] }] },
-      "metrics": { "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0 }
+                       "subagent_trajectory_ref": [{ "trajectory_id": "string", "trajectory_path": "string",
+                                                     "session_id": "string (informational)" }],
+                       "extra": {} }] },
+      "metrics": { "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0 },
+      "llm_call_count": 1,
+      "is_copied_context": false
     }],
     "final_metrics": { "total_prompt_tokens": 0, "total_completion_tokens": 0,
                        "total_cached_tokens": 0, "total_cost_usd": 0.0, "total_steps": 0 },
+    "subagent_trajectories": [{ "...complete ATIF trajectory..." }],
     "notes": "string"
   }
 
 OUTPUT
   File mode:   Main trajectory to <prefix>.trajectory.json, subagent trajectories
                to <prefix>.trajectory.<name>.json.
-  --json mode: JSON array of all trajectories to stdout (no files written).
-               First element is the main trajectory, rest are subagents.
+  --json mode: Single trajectory with subagents embedded in subagent_trajectories
+               array to stdout (no files written).
   Diagnostics and progress go to stderr.
 
 EXIT CODES
@@ -271,14 +278,14 @@ async function main(): Promise<void> {
   const { trajectory, subagentTrajectories } = result;
 
   if (opts.json) {
-    // --json mode: output array of all trajectories to stdout, no files written
-    const allTrajectories = [trajectory];
-    if (subagentTrajectories) {
+    // --json mode: embed subagents in subagent_trajectories for single-file output
+    if (subagentTrajectories && subagentTrajectories.size > 0) {
+      trajectory.subagent_trajectories = [];
       for (const sub of subagentTrajectories.values()) {
-        allTrajectories.push(sub);
+        trajectory.subagent_trajectories.push(sub);
       }
     }
-    const cleaned = stripUndefined(allTrajectories);
+    const cleaned = stripUndefined(trajectory);
     process.stdout.write(JSON.stringify(cleaned, null, 2));
     process.stdout.write("\n");
   } else {
@@ -286,7 +293,7 @@ async function main(): Promise<void> {
     if (subagentTrajectories && subagentTrajectories.size > 0) {
       for (const [parentId, subTrajectory] of subagentTrajectories) {
         // Derive file-safe name from session_id (last segment after ":")
-        const namePart = subTrajectory.session_id.includes(":")
+        const namePart = subTrajectory.session_id?.includes(":")
           ? subTrajectory.session_id.split(":").pop()!
           : parentId;
         const safeName = namePart.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -299,7 +306,7 @@ async function main(): Promise<void> {
           for (const obs of step.observation.results) {
             if (!obs.subagent_trajectory_ref) continue;
             for (const ref of obs.subagent_trajectory_ref) {
-              if (ref.session_id === subTrajectory.session_id) {
+              if (ref.trajectory_id === subTrajectory.trajectory_id) {
                 ref.trajectory_path = subFilename;
               }
             }

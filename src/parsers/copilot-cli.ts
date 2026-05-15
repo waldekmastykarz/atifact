@@ -221,7 +221,7 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
   const finalMetrics = buildFinalMetrics(resultLine, shutdownLine, steps);
 
   const trajectory: Trajectory = {
-    schema_version: "ATIF-v1.6",
+    schema_version: "ATIF-v1.7",
     session_id: sessionId,
     agent,
     steps,
@@ -302,6 +302,7 @@ function buildSteps(
             content: result?.data.result?.content || undefined,
             subagent_trajectory_ref: [
               {
+                trajectory_id: subTrajectory?.trajectory_id || tc.tool_call_id,
                 session_id: subTrajectory?.session_id || tc.tool_call_id,
               },
             ],
@@ -465,8 +466,9 @@ function buildSubagentTrajectories(
     const subSessionId = `${parentSessionId}:${taskName || parentId}`;
 
     trajectories.set(parentId, {
-      schema_version: "ATIF-v1.6",
+      schema_version: "ATIF-v1.7",
       session_id: subSessionId,
+      trajectory_id: parentId,
       agent: {
         name: agentType || "copilot-cli-subagent",
         version: "1.0.0",
