@@ -4,6 +4,8 @@ Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-
 
 Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
+![A terminal session on a macOS desktop showing the atifact CLI tool in action. Two commands are displayed against a dark background. The first command runs: atifact copilot-cli-subagent.jsonl — the output shows: Detecting input format..., Detected: Copilot CLI logs (JSONL), Parsing copilot-cli-jsonl..., followed by two Wrote lines confirming trajectory files were saved, and a summary: Done. 3 steps, 2 agent turns, 1 subagent trajectories. The second command runs: cat copilot-cli-subagent.jsonl.trajectory.json — showing a JSON object with fields including schema_version: ATIF-v1.7, session_id: session-subagent-001, an agent block with name: copilot-cli, version: 1.0.0, model_name: claude-opus-4.6-1m, and a steps array beginning with step_id: 1, timestamp: 2026-03-25T16:29:11.000Z, source: user, message: Explore the project structure. The status bar at the bottom shows version v24.15.0, the file path, branch main, and a change count of +137. The overall tone is functional and developer-focused.](assets/screenshot.png)
+
 ## Use with AI agents
 
 Give your AI coding agent the atifact skill so it can extract trajectories on your behalf:
