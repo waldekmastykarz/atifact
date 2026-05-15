@@ -132,7 +132,7 @@ export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
 
   return {
     trajectory: {
-      schema_version: "ATIF-v1.6",
+      schema_version: "ATIF-v1.7",
       session_id: initLine.session_id,
       agent,
       steps,

@@ -62,7 +62,7 @@ export async function parseHar(filePath: string): Promise<ParseResult> {
 
   return {
     trajectory: {
-      schema_version: "ATIF-v1.6",
+      schema_version: "ATIF-v1.7",
       session_id: generateSessionId(har),
       agent,
       steps,

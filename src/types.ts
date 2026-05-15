@@ -1,14 +1,16 @@
-// ATIF v1.6 types
+// ATIF v1.7 types
 
 export interface Trajectory {
   schema_version: string;
-  session_id: string;
+  session_id?: string;
+  trajectory_id?: string;
   agent: Agent;
   steps: Step[];
   notes?: string;
   final_metrics?: FinalMetrics;
   continued_trajectory_ref?: string;
   extra?: Record<string, unknown>;
+  subagent_trajectories?: Trajectory[];
 }
 
 export interface Agent {
@@ -40,6 +42,8 @@ export interface Step {
   observation?: Observation;
   metrics?: Metrics;
   extra?: Record<string, unknown>;
+  llm_call_count?: number;
+  is_copied_context?: boolean;
 }
 
 export interface ContentPart {
@@ -57,6 +61,7 @@ export interface ToolCall {
   tool_call_id: string;
   function_name: string;
   arguments: Record<string, unknown>;
+  extra?: Record<string, unknown>;
 }
 
 export interface Observation {
@@ -67,11 +72,13 @@ export interface ObservationResult {
   source_call_id?: string;
   content?: string | ContentPart[];
   subagent_trajectory_ref?: SubagentTrajectoryRef[];
+  extra?: Record<string, unknown>;
 }
 
 export interface SubagentTrajectoryRef {
-  session_id: string;
+  trajectory_id?: string;
   trajectory_path?: string;
+  session_id?: string;
   extra?: Record<string, unknown>;
 }
 

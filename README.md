@@ -2,7 +2,7 @@
 
 Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-format) trajectories. One command. Zero dependencies.
 
-Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
+Turn HAR files, Claude Code logs, and Copilot CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
 ## Use with AI agents
 
@@ -33,12 +33,12 @@ atifact claude-log.jsonl
 atifact copilot-session.jsonl
 
 # Pipe to stdout (returns JSON array of trajectories)
-atifact session.har --json | jq '.[0].steps | length'
+atifact session.har --json | jq '.steps | length'
 ```
 
-Output: `<input>.trajectory.json` in ATIF v1.6 format. Copilot CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
+Output: `<input>.trajectory.json` in ATIF v1.7 format. Copilot CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
 
-`--json` mode outputs a JSON array of all trajectories (main first, then subagents) to stdout with no files written.
+`--json` mode outputs a single trajectory with subagents embedded in the `subagent_trajectories` array to stdout with no files written.
 
 ## Supported inputs
 
@@ -65,7 +65,7 @@ atifact <input-file> [options]
 |---|---|
 | `-o, --output <prefix>` | Output path prefix (default: input file path). Main: `<prefix>.trajectory.json`, subagents: `<prefix>.trajectory.<name>.json` |
 | `-f, --format <fmt>` | Force input format: `har`, `claude-code-jsonl`, `copilot-cli-jsonl` |
-| `--json` | Write JSON array of all trajectories to stdout (no files written) |
+| `--json` | Write trajectory to stdout with subagents embedded (no files written) |
 | `-q, --quiet` | Suppress progress messages |
 | `-h, --help` | Show help |
 | `--version` | Print version |
@@ -80,12 +80,12 @@ atifact <input-file> [options]
 
 ## Output format
 
-atifact produces [ATIF v1.6](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) JSON with:
+atifact produces [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) JSON with:
 
 - **Steps** — user messages, agent responses, tool calls, and observations
 - **Metrics** — token counts, costs, cached tokens per step
 - **Tool calls** — structured function name + arguments with observation results
-- **Subagent trajectories** — Copilot CLI subagents (task tool calls) produce separate trajectory files, linked via `subagent_trajectory_ref`
+- **Subagent trajectories** — Copilot CLI subagents (task tool calls) produce separate trajectory files linked via `subagent_trajectory_ref` with `trajectory_id` resolution; `--json` mode embeds them in `subagent_trajectories`
 - **Final metrics** — aggregated totals across the trajectory
 - All timestamps preserved as ISO 8601 from source data
 - Null/undefined fields excluded for compact output
@@ -116,7 +116,7 @@ atifact copilot-session.jsonl
 ### Count agent steps
 
 ```sh
-atifact session.har --json | jq '[.[0].steps[] | select(.source == "agent")] | length'
+atifact session.har --json | jq '[.steps[] | select(.source == "agent")] | length'
 ```
 
 ## Requirements

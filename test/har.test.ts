@@ -11,7 +11,7 @@ const fixture = (name: string) => resolve(projectRoot, "test", "fixtures", name)
 describe("parseHar — Anthropic Messages API", () => {
   it("produces a valid ATIF trajectory", async () => {
     const { trajectory: t } = await parseHar(fixture("har-anthropic.har"));
-    assert.equal(t.schema_version, "ATIF-v1.6");
+    assert.equal(t.schema_version, "ATIF-v1.7");
     assert.equal(t.session_id, "req-har-001");
   });
 
@@ -64,7 +64,7 @@ describe("parseHar — Anthropic Messages API", () => {
 describe("parseHar — OpenAI Responses API", () => {
   it("produces a valid ATIF trajectory", async () => {
     const { trajectory: t } = await parseHar(fixture("har-openai-responses.har"));
-    assert.equal(t.schema_version, "ATIF-v1.6");
+    assert.equal(t.schema_version, "ATIF-v1.7");
   });
 
   it("extracts editor version from headers", async () => {
@@ -112,7 +112,7 @@ describe("parseHar — OpenAI Responses API", () => {
 describe("parseHar — OpenAI Chat Completions", () => {
   it("produces a valid ATIF trajectory", async () => {
     const { trajectory: t } = await parseHar(fixture("har-openai-chat.har"));
-    assert.equal(t.schema_version, "ATIF-v1.6");
+    assert.equal(t.schema_version, "ATIF-v1.7");
   });
 
   it("extracts system prompt", async () => {

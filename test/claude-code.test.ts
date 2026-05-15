@@ -12,7 +12,7 @@ describe("parseClaudeCode", () => {
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.6");
+      assert.equal(t.schema_version, "ATIF-v1.7");
       assert.equal(t.session_id, "sess-abc123");
     });
 
@@ -148,7 +148,7 @@ describe("parseClaudeCode", () => {
   describe("rate_limit_event prefix", () => {
     it("parses when init line is not the first line", async () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-rate-limit-prefix.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.6");
+      assert.equal(t.schema_version, "ATIF-v1.7");
       assert.equal(t.session_id, "sess-abc123");
       assert.equal(t.agent.name, "claude-code");
     });
