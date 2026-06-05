@@ -1,0 +1,11 @@
+{"type":"thread.started","thread_id":"019e-main-thread"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I'll create the files and spawn a reviewer agent."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'echo hello'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'echo hello'","aggregated_output":"hello\n","exit_code":0,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_2","type":"file_change","changes":[{"path":"/home/user/project/src/index.ts","kind":"add"}],"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/home/user/project/src/index.ts","kind":"add"}],"status":"completed"}}
+{"type":"item.started","item":{"id":"item_3","type":"collab_tool_call","tool":"spawn_agent","sender_thread_id":"019e-main-thread","receiver_thread_ids":[],"prompt":"Review src/index.ts for correctness.","agents_states":{},"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_3","type":"collab_tool_call","tool":"spawn_agent","sender_thread_id":"019e-main-thread","receiver_thread_ids":["019e-sub-thread-1"],"prompt":"Review src/index.ts for correctness.","agents_states":{"019e-sub-thread-1":{"status":"pending_init","message":null}},"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_4","type":"agent_message","text":"The reviewer agent is checking the code. Everything looks good."}}
+{"type":"turn.completed","usage":{"input_tokens":50000,"cached_input_tokens":40000,"output_tokens":800,"reasoning_output_tokens":100}}

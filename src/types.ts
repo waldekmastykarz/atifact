@@ -111,7 +111,7 @@ export interface ParseResult {
 
 // Input format types
 
-export type InputFormat = "har" | "claude-code-jsonl" | "copilot-cli-jsonl";
+export type InputFormat = "har" | "claude-code-jsonl" | "copilot-cli-jsonl" | "codex-cli-jsonl";
 
 export interface DetectedFormat {
   format: InputFormat;

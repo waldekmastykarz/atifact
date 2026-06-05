@@ -13,6 +13,14 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
     };
   }
 
+  // JSONL: Codex CLI exec --json format (thread.started / item.* events)
+  if (looksLikeCodexCliJsonl(firstLine)) {
+    return {
+      format: "codex-cli-jsonl",
+      description: "Codex CLI logs (JSONL)",
+    };
+  }
+
   // JSONL: Copilot CLI stream format (session.* or user.message events)
   if (looksLikeCopilotCliJsonl(firstLine)) {
     return {
@@ -28,7 +36,7 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
 
   throw new Error(
     `Unable to detect input format for: ${filePath}\n` +
-      `Supported formats: HAR (.har), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl)`
+      `Supported formats: HAR (.har), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl), Codex CLI logs (.jsonl)`
   );
 }
 
@@ -62,6 +70,25 @@ function looksLikeCopilotCliJsonl(firstLine: string): boolean {
       (first.type.startsWith("session.") || first.type === "user.message") &&
       typeof first.timestamp === "string"
     );
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeCodexCliJsonl(content: string): boolean {
+  try {
+    const lines = content.split("\n").slice(0, 5);
+    return lines.some((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        return (
+          parsed.type === "thread.started" &&
+          typeof parsed.thread_id === "string"
+        );
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return false;
   }

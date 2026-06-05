@@ -16,7 +16,9 @@ When updating the ATIF version referenced in this project, update all occurrence
 - `src/parsers/har.ts` — `schema_version` field
 - `src/parsers/claude-code.ts` — `schema_version` field
 - `src/parsers/copilot-cli.ts` — `schema_version` field
+- `src/parsers/codex-cli.ts` — `schema_version` field
 - `test/har.test.ts` — assertions
 - `test/cli.test.ts` — assertions
 - `test/claude-code.test.ts` — assertions
 - `test/copilot-cli.test.ts` — assertions
+- `test/codex-cli.test.ts` — assertions

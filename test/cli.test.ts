@@ -102,6 +102,21 @@ describe("CLI integration", () => {
     assert.ok(trajectory.steps.length > 0);
   });
 
+  it("converts Codex CLI JSONL to ATIF with --json", async () => {
+    const { stdout } = await exec("node", [
+      cli,
+      fixture("codex-cli-simple.jsonl"),
+      "--json",
+      "--quiet",
+    ]);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(typeof trajectory, "object");
+    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.session_id, "019e97e4-ba5c-7680-85c2-3399e3b68eaf");
+    assert.equal(trajectory.agent.name, "codex-cli");
+    assert.ok(trajectory.steps.length > 0);
+  });
+
   it("writes output to file by default", async () => {
     const input = fixture("claude-code-simple.jsonl");
     const outputPrefix = resolve(
