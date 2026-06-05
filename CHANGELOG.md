@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0](https://github.com/waldekmastykarz/atifact/compare/v0.7.0...v0.8.0)
+
+### Features
+
+- Add Codex CLI JSONL parser (`codex exec --json` logs)
+
 ## [0.7.0](https://github.com/waldekmastykarz/atifact/compare/v0.6.4...v0.7.0)
 
 ### Features
