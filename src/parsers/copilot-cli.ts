@@ -27,6 +27,38 @@ interface CopilotToolsUpdated {
   timestamp: string;
 }
 
+interface CopilotMcpServer {
+  name: string;
+  status: string;
+  source?: string;
+  transport?: string;
+}
+
+interface CopilotMcpServersLoaded {
+  type: "session.mcp_servers_loaded";
+  data: {
+    servers: CopilotMcpServer[];
+  };
+  timestamp: string;
+}
+
+interface CopilotSkill {
+  name: string;
+  description?: string;
+  source?: string;
+  userInvocable?: boolean;
+  enabled?: boolean;
+  path?: string;
+}
+
+interface CopilotSkillsLoaded {
+  type: "session.skills_loaded";
+  data: {
+    skills: CopilotSkill[];
+  };
+  timestamp: string;
+}
+
 interface CopilotUserMessage {
   type: "user.message";
   data: {
@@ -131,6 +163,8 @@ interface CopilotSessionShutdown {
 type CopilotLine =
   | CopilotSessionStart
   | CopilotToolsUpdated
+  | CopilotMcpServersLoaded
+  | CopilotSkillsLoaded
   | CopilotUserMessage
   | CopilotAssistantMessage
   | CopilotAssistantMessageDelta
@@ -209,7 +243,25 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
     sessionId
   );
 
-  const agent = buildAgent(model);
+  // Collect MCP servers (deduplicated by name, last occurrence wins)
+  const mcpServersMap = new Map<string, CopilotMcpServer>();
+  for (const line of lines) {
+    if (line.type === "session.mcp_servers_loaded") {
+      const loaded = line as CopilotMcpServersLoaded;
+      for (const server of loaded.data.servers) {
+        mcpServersMap.set(server.name, server);
+      }
+    }
+  }
+  const mcpServers = mcpServersMap.size > 0 ? [...mcpServersMap.values()] : undefined;
+
+  // Collect skills
+  const skillsLoaded = lines.find(
+    (l) => l.type === "session.skills_loaded"
+  ) as CopilotSkillsLoaded | undefined;
+  const skills = skillsLoaded?.data.skills;
+
+  const agent = buildAgent(model, mcpServers, skills);
   const steps = buildSteps(
     lines,
     deltaContent,
@@ -236,12 +288,40 @@ export async function parseCopilotCli(filePath: string): Promise<ParseResult> {
   };
 }
 
-function buildAgent(model: string | undefined): Agent {
-  return {
+function buildAgent(
+  model: string | undefined,
+  mcpServers?: CopilotMcpServer[],
+  skills?: CopilotSkill[]
+): Agent {
+  const agent: Agent = {
     name: "copilot-cli",
     version: "1.0.0",
     model_name: model,
   };
+
+  const extra: Record<string, unknown> = {};
+  if (mcpServers && mcpServers.length > 0) {
+    extra.mcp_servers = mcpServers.map((s) => ({
+      name: s.name,
+      status: s.status,
+      ...(s.source && { source: s.source }),
+      ...(s.transport && { transport: s.transport }),
+    }));
+  }
+  if (skills && skills.length > 0) {
+    extra.skills = skills.map((s) => ({
+      name: s.name,
+      ...(s.description && { description: s.description }),
+      ...(s.source && { source: s.source }),
+      ...(s.userInvocable !== undefined && { user_invocable: s.userInvocable }),
+      ...(s.enabled !== undefined && { enabled: s.enabled }),
+    }));
+  }
+  if (Object.keys(extra).length > 0) {
+    agent.extra = extra;
+  }
+
+  return agent;
 }
 
 function buildSteps(

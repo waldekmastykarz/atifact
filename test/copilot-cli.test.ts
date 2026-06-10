@@ -214,6 +214,62 @@ describe("parseCopilotCli", () => {
     });
   });
 
+  describe("MCP server and skills discovery", () => {
+    it("captures MCP servers in agent.extra", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
+      assert.ok(t.agent.extra);
+      assert.ok(t.agent.extra!.mcp_servers);
+      const servers = t.agent.extra!.mcp_servers as Array<Record<string, unknown>>;
+      assert.equal(servers.length, 1);
+      assert.equal(servers[0].name, "github-mcp-server");
+      assert.equal(servers[0].status, "connected");
+      assert.equal(servers[0].source, "builtin");
+      assert.equal(servers[0].transport, "http");
+    });
+
+    it("captures skills in agent.extra", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
+      assert.ok(t.agent.extra);
+      assert.ok(t.agent.extra!.skills);
+      const skills = t.agent.extra!.skills as Array<Record<string, unknown>>;
+      assert.equal(skills.length, 1);
+      assert.equal(skills[0].name, "customize-cloud-agent");
+      assert.equal(skills[0].source, "builtin");
+      assert.equal(skills[0].user_invocable, false);
+      assert.equal(skills[0].enabled, true);
+    });
+
+    it("deduplicates MCP servers by name (last wins)", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-mcp-skills.jsonl"));
+      const servers = t.agent.extra!.mcp_servers as Array<Record<string, unknown>>;
+      assert.equal(servers.length, 2);
+      const github = servers.find((s) => s.name === "github-mcp-server");
+      assert.ok(github);
+      assert.equal(github!.status, "connected");
+    });
+
+    it("captures multiple skills from skills_loaded", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-mcp-skills.jsonl"));
+      const skills = t.agent.extra!.skills as Array<Record<string, unknown>>;
+      assert.equal(skills.length, 2);
+      assert.equal(skills[0].name, "spfx");
+      assert.equal(skills[0].user_invocable, true);
+      assert.equal(skills[1].name, "customize-cloud-agent");
+      assert.equal(skills[1].user_invocable, false);
+    });
+
+    it("omits agent.extra when no MCP servers or skills", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-no-tools-updated.jsonl"));
+      assert.equal(t.agent.extra, undefined);
+    });
+
+    it("does not include skill file paths in output", async () => {
+      const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
+      const skills = t.agent.extra!.skills as Array<Record<string, unknown>>;
+      assert.equal(skills[0].path, undefined);
+    });
+  });
+
   describe("session.shutdown token extraction", () => {
     it("extracts total_prompt_tokens from modelMetrics", async () => {
       const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-shutdown.jsonl"));
