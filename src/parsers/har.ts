@@ -73,15 +73,19 @@ export async function parseHar(filePath: string): Promise<ParseResult> {
     throw new Error("No LLM API calls found in HAR file");
   }
 
-  // Determine the primary model (most-used non-utility model)
-  const primaryModel = detectPrimaryModel(exchanges);
-  const agent = buildAgent(exchanges, primaryModel);
+  const routingExchanges = extractRoutingExchanges(har);
+
+  // The trajectory-level default model reflects what the user selected for the
+  // session (a specific model, or "auto" when model routing is used). Any
+  // per-turn model change is reflected on each agent step's own model_name.
+  const selectedModel = detectSelectedModel(exchanges);
+  const agent = buildAgent(exchanges, selectedModel, routingExchanges);
   const steps = buildSteps(exchanges);
 
   // Merge in any model-routing steps, ordered by request time so they appear
   // before the turn they route (routing happens before the prompt is sent to
   // the chosen model).
-  const routingSteps = buildRoutingSteps(extractRoutingExchanges(har));
+  const routingSteps = buildRoutingSteps(routingExchanges);
   const mergedSteps = mergeRoutingSteps(steps, routingSteps);
   for (let i = 0; i < mergedSteps.length; i++) {
     mergedSteps[i].step_id = i + 1;
@@ -325,41 +329,40 @@ function parseSseStream(
   return events;
 }
 
-function detectPrimaryModel(exchanges: ParsedExchange[]): string {
-  const modelCounts = new Map<string, number>();
-  for (const ex of exchanges) {
-    // Skip utility models (title generation, etc.)
-    if (ex.model.includes("mini") || ex.model.includes("small")) continue;
-    modelCounts.set(ex.model, (modelCounts.get(ex.model) || 0) + 1);
-  }
-  if (modelCounts.size === 0 && exchanges.length > 0) {
-    return exchanges[0].model;
-  }
-  let best = "";
-  let bestCount = 0;
-  for (const [model, count] of modelCounts) {
-    if (count > bestCount) {
-      best = model;
-      bestCount = count;
-    }
-  }
-  return best || "unknown";
+// A utility exchange is a lightweight side-call (e.g. title generation) made on a
+// small/mini model with only a couple of messages — not part of the conversation
+// the user is actually driving.
+function isUtilityExchange(ex: ParsedExchange): boolean {
+  if (!(ex.model.includes("mini") || ex.model.includes("small"))) return false;
+  const messages = (ex.request.messages || ex.request.input) as unknown[];
+  return Array.isArray(messages) && messages.length <= 3;
+}
+
+// The model the user selected for the session: the first non-utility exchange's
+// model. This is the trajectory-level default; a mid-session model change is
+// reflected on the individual agent step's model_name, which overrides this.
+function detectSelectedModel(exchanges: ParsedExchange[]): string {
+  const firstMain = exchanges.find((ex) => !isUtilityExchange(ex));
+  return firstMain?.model || exchanges[0]?.model || "unknown";
 }
 
 function buildAgent(
   exchanges: ParsedExchange[],
-  primaryModel: string
+  selectedModel: string,
+  routing: RoutingExchange[] = []
 ): Agent {
+  const usingRouting = routing.length > 0;
   const agent: Agent = {
     name: "copilot-chat",
     version: extractEditorVersion(exchanges),
-    model_name: primaryModel,
+    // When the session used Auto model routing, the user selected "auto" in the
+    // model picker; the router resolved a concrete model per turn (preserved on
+    // each agent step's model_name). Reflect the user's actual selection here.
+    model_name: usingRouting ? "auto" : selectedModel,
   };
 
-  // Extract tool definitions from the first main exchange
-  const mainExchange = exchanges.find(
-    (e) => e.apiFormat !== "openai-chat" || e.model === primaryModel
-  );
+  // Extract tool definitions from the first main (non-utility) exchange
+  const mainExchange = exchanges.find((e) => !isUtilityExchange(e));
   if (mainExchange) {
     const tools = extractToolDefinitions(mainExchange);
     if (tools.length > 0) {
@@ -433,13 +436,9 @@ function buildSteps(exchanges: ParsedExchange[]): Step[] {
   const utilityExchanges: ParsedExchange[] = [];
 
   for (const ex of exchanges) {
-    if (ex.model.includes("mini") || ex.model.includes("small")) {
-      // Only mark as utility if it looks like a utility call (short messages, title gen)
-      const messages = (ex.request.messages || ex.request.input) as unknown[];
-      if (Array.isArray(messages) && messages.length <= 3) {
-        utilityExchanges.push(ex);
-        continue;
-      }
+    if (isUtilityExchange(ex)) {
+      utilityExchanges.push(ex);
+      continue;
     }
     mainExchanges.push(ex);
   }

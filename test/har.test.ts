@@ -486,4 +486,15 @@ describe("parseHar — model routing", () => {
       assert.equal(ids[i], i + 1);
     }
   });
+
+  it("reports the agent model_name as 'auto' when routing is used", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    assert.equal(t.agent.model_name, "auto");
+  });
+
+  it("preserves the resolved model on each agent step", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    const agentStep = t.steps.find((s) => s.source === "agent")!;
+    assert.equal(agentStep.model_name, "gpt-5.3-codex");
+  });
 });
