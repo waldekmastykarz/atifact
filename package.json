@@ -1,6 +1,6 @@
 {
   "name": "atifact",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Convert HAR files and Claude Code CLI logs to ATIF-format agent trajectories",
   "type": "module",
   "bin": {
