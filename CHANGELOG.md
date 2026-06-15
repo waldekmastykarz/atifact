@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/waldekmastykarz/atifact/compare/v0.9.0...v0.10.0)
+
+### Features
+
+- Extract trajectories from WebSocket exchanges in HAR files
+- Capture Copilot model routing decisions as a system step in HAR trajectories
+
 ## [0.9.0](https://github.com/waldekmastykarz/atifact/compare/v0.8.0...v0.9.0)
 
 ### Features
