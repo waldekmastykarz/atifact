@@ -53,6 +53,17 @@ interface ParsedExchange {
   requestHeaders: Record<string, string>;
 }
 
+interface RoutingExchange {
+  timestamp: string;
+  requestText: string;
+  responseText: string;
+}
+
+// Endpoint whose request/response captures an agent's model-routing decision.
+// The exchange is represented generically (raw request + response payloads),
+// so only the detection is endpoint-specific, not the representation.
+const ROUTING_PATH_SUFFIX = "/models/session/intent";
+
 export async function parseHar(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
   const har: HarFile = JSON.parse(raw);
@@ -66,14 +77,24 @@ export async function parseHar(filePath: string): Promise<ParseResult> {
   const primaryModel = detectPrimaryModel(exchanges);
   const agent = buildAgent(exchanges, primaryModel);
   const steps = buildSteps(exchanges);
-  const finalMetrics = computeFinalMetrics(steps);
+
+  // Merge in any model-routing steps, ordered by request time so they appear
+  // before the turn they route (routing happens before the prompt is sent to
+  // the chosen model).
+  const routingSteps = buildRoutingSteps(extractRoutingExchanges(har));
+  const mergedSteps = mergeRoutingSteps(steps, routingSteps);
+  for (let i = 0; i < mergedSteps.length; i++) {
+    mergedSteps[i].step_id = i + 1;
+  }
+
+  const finalMetrics = computeFinalMetrics(mergedSteps);
 
   return {
     trajectory: {
       schema_version: "ATIF-v1.7",
       session_id: generateSessionId(har),
       agent,
-      steps,
+      steps: mergedSteps,
       final_metrics: finalMetrics,
       notes: `Converted from HAR file: ${filePath}`,
     },
@@ -128,6 +149,64 @@ function extractExchanges(har: HarFile): ParsedExchange[] {
   }
 
   return exchanges;
+}
+
+function extractRoutingExchanges(har: HarFile): RoutingExchange[] {
+  const routing: RoutingExchange[] = [];
+
+  for (const entry of har.log.entries) {
+    if (entry.request.method !== "POST") continue;
+
+    let path: string;
+    try {
+      path = new URL(entry.request.url).pathname;
+    } catch {
+      path = entry.request.url;
+    }
+    if (!path.endsWith(ROUTING_PATH_SUFFIX)) continue;
+
+    const requestText = entry.request.postData?.text;
+    const responseText = entry.response.content.text;
+    if (!requestText || !responseText) continue;
+
+    routing.push({
+      timestamp: entry.startedDateTime,
+      requestText: requestText.trim(),
+      responseText: responseText.trim(),
+    });
+  }
+
+  return routing;
+}
+
+function buildRoutingSteps(routing: RoutingExchange[]): Step[] {
+  return routing.map((r) => ({
+    step_id: 0,
+    timestamp: r.timestamp,
+    source: "system",
+    message: r.requestText,
+    observation: {
+      results: [{ content: r.responseText }],
+    },
+    extra: { event_type: "model_routing" },
+  }));
+}
+
+function mergeRoutingSteps(steps: Step[], routingSteps: Step[]): Step[] {
+  if (routingSteps.length === 0) return steps;
+
+  const merged = [...steps];
+  for (const rStep of routingSteps) {
+    const rTime = rStep.timestamp ? new Date(rStep.timestamp).getTime() : 0;
+    let idx = merged.findIndex((s) => {
+      const sTime = s.timestamp ? new Date(s.timestamp).getTime() : Infinity;
+      return sTime >= rTime;
+    });
+    if (idx === -1) idx = merged.length;
+    merged.splice(idx, 0, rStep);
+  }
+
+  return merged;
 }
 
 function extractWebSocketExchanges(entry: HarEntry): ParsedExchange[] {

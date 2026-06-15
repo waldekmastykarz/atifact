@@ -442,3 +442,48 @@ describe("parseHar — error handling", () => {
     );
   });
 });
+
+describe("parseHar — model routing", () => {
+  it("emits a model_routing system step", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    const routing = t.steps.find((s) => s.extra?.event_type === "model_routing");
+    assert.ok(routing);
+    assert.equal(routing!.source, "system");
+  });
+
+  it("orders routing before the system prompt and first turn", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    assert.equal(t.steps[0].extra?.event_type, "model_routing");
+    assert.equal(t.steps[1].source, "system");
+    assert.equal(t.steps[1].message, "You are helpful.");
+    assert.equal(t.steps[2].source, "user");
+    assert.equal(t.steps[3].source, "agent");
+  });
+
+  it("captures the raw routing request as the step message", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    const routing = t.steps.find((s) => s.extra?.event_type === "model_routing")!;
+    const req = JSON.parse(routing.message as string);
+    assert.equal(req.prompt, "Say hi");
+    assert.equal(req.routing_method, "hydra");
+    assert.deepEqual(req.available_models, ["gpt-5.3-codex", "claude-sonnet-4.6"]);
+  });
+
+  it("captures the raw routing response as the observation", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    const routing = t.steps.find((s) => s.extra?.event_type === "model_routing")!;
+    assert.ok(routing.observation);
+    const res = JSON.parse(routing.observation!.results[0].content as string);
+    assert.equal(res.chosen_model, "gpt-5.3-codex");
+    assert.equal(res.routing_method, "hydra");
+    assert.equal(res.fallback, false);
+  });
+
+  it("renumbers steps sequentially including the routing step", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-model-routing.har"));
+    const ids = t.steps.map((s) => s.step_id);
+    for (let i = 0; i < ids.length; i++) {
+      assert.equal(ids[i], i + 1);
+    }
+  });
+});

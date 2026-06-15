@@ -5,7 +5,7 @@ description: This skill should be used when the user asks to "extract agent traj
 
 # Extract Agent Trajectories with atifact
 
-Convert agent session recordings (HAR files, Claude Code JSONL logs, Copilot CLI JSONL logs) into structured ATIF v1.6 trajectory JSON using the `atifact` CLI.
+Convert agent session recordings (HAR files, Claude Code JSONL logs, Copilot CLI JSONL logs) into structured ATIF v1.7 trajectory JSON using the `atifact` CLI.
 
 ## Prerequisites
 
