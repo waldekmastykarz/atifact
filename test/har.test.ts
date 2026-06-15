@@ -289,6 +289,151 @@ describe("parseHar — OpenAI Chat streaming tool calls", () => {
   });
 });
 
+describe("parseHar — WebSocket Responses API", () => {
+  it("produces a valid ATIF trajectory", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    assert.equal(t.schema_version, "ATIF-v1.7");
+  });
+
+  it("extracts editor version from entry headers", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    assert.equal(t.agent.version, "copilot-chat/0.52.0");
+  });
+
+  it("extracts system prompt from first turn", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const system = t.steps.find((s) => s.source === "system");
+    assert.ok(system);
+    assert.equal(system!.message, "You are a coding assistant.");
+  });
+
+  it("extracts user message from first turn", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const user = t.steps.find((s) => s.source === "user");
+    assert.ok(user);
+    assert.equal(user!.message, "Create a hello world app");
+  });
+
+  it("extracts agent response with text from streaming deltas", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps.length >= 1);
+    assert.equal(agentSteps[0].message, "I'll create a hello world app.");
+  });
+
+  it("extracts tool calls from first turn", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps[0].tool_calls);
+    assert.equal(agentSteps[0].tool_calls!.length, 1);
+    assert.equal(agentSteps[0].tool_calls![0].function_name, "run_in_terminal");
+    assert.equal(agentSteps[0].tool_calls![0].tool_call_id, "call_abc123");
+    assert.deepEqual(agentSteps[0].tool_calls![0].arguments, { command: "echo hello world" });
+  });
+
+  it("extracts reasoning content from summary deltas", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps[0].reasoning_content);
+    assert.ok(agentSteps[0].reasoning_content!.includes("Planning the project structure"));
+  });
+
+  it("extracts reasoning effort from request", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.equal(agentSteps[0].reasoning_effort, "medium");
+  });
+
+  it("attaches tool results from second turn to first agent step", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps[0].observation);
+    assert.equal(agentSteps[0].observation!.results.length, 1);
+    assert.equal(agentSteps[0].observation!.results[0].source_call_id, "call_abc123");
+    assert.equal(agentSteps[0].observation!.results[0].content, "hello world");
+  });
+
+  it("extracts second turn agent response", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.equal(agentSteps.length, 2);
+    assert.equal(agentSteps[1].message, "The app is ready!");
+  });
+
+  it("extracts metrics from response.completed", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps[0].metrics);
+    assert.equal(agentSteps[0].metrics!.prompt_tokens, 500);
+    assert.equal(agentSteps[0].metrics!.completion_tokens, 100);
+    assert.equal(agentSteps[0].metrics!.cached_tokens, 400);
+    assert.deepEqual(agentSteps[0].metrics!.extra, { reasoning_tokens: 30 });
+  });
+
+  it("does not emit duplicate user messages from subsequent turns", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const userSteps = t.steps.filter((s) => s.source === "user");
+    assert.equal(userSteps.length, 1);
+  });
+
+  it("extracts tool definitions from first turn", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    assert.ok(t.agent.tool_definitions);
+    assert.equal(t.agent.tool_definitions!.length, 1);
+    assert.equal(t.agent.tool_definitions![0].function.name, "run_in_terminal");
+  });
+
+  it("uses primary model as agent model_name", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    assert.equal(t.agent.model_name, "gpt-5.3-codex");
+  });
+
+  it("computes final metrics across all turns", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    assert.ok(t.final_metrics);
+    assert.equal(t.final_metrics!.total_prompt_tokens, 1100);
+    assert.equal(t.final_metrics!.total_completion_tokens, 150);
+    assert.equal(t.final_metrics!.total_cached_tokens, 950);
+  });
+
+  it("numbers steps sequentially", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const ids = t.steps.map((s) => s.step_id);
+    for (let i = 0; i < ids.length; i++) {
+      assert.equal(ids[i], i + 1);
+    }
+  });
+
+  it("produces correct step order", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-responses.har"));
+    const sources = t.steps.map((s) => s.source);
+    assert.deepEqual(sources, ["system", "user", "agent", "agent"]);
+  });
+});
+
+describe("parseHar — mixed HTTP and WebSocket entries", () => {
+  it("filters out utility HTTP calls and uses WebSocket agent model", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
+    assert.equal(t.agent.model_name, "gpt-5.3-codex");
+  });
+
+  it("includes only WebSocket agent steps when HTTP calls are utility", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    for (const step of agentSteps) {
+      assert.equal(step.model_name, "gpt-5.3-codex");
+    }
+  });
+
+  it("attaches tool results across WebSocket turns", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    assert.ok(agentSteps[0].observation);
+    assert.equal(agentSteps[0].observation!.results[0].source_call_id, "call_mixed1");
+    assert.equal(agentSteps[0].observation!.results[0].content, "hello");
+  });
+});
+
 describe("parseHar — error handling", () => {
   it("throws when HAR has no LLM API calls", async () => {
     await assert.rejects(

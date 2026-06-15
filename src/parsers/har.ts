@@ -32,6 +32,14 @@ interface HarEntry {
     headers: { name: string; value: string }[];
     content: { text?: string; mimeType: string };
   };
+  _webSocketMessages?: WebSocketMessage[];
+}
+
+interface WebSocketMessage {
+  type: "send" | "receive";
+  time: number;
+  opcode: number;
+  data: string;
 }
 
 type ApiFormat = "openai-chat" | "openai-responses" | "anthropic-messages";
@@ -76,6 +84,12 @@ function extractExchanges(har: HarFile): ParsedExchange[] {
   const exchanges: ParsedExchange[] = [];
 
   for (const entry of har.log.entries) {
+    // WebSocket entry: GET /responses with _webSocketMessages
+    if (entry._webSocketMessages && entry._webSocketMessages.length > 0) {
+      exchanges.push(...extractWebSocketExchanges(entry));
+      continue;
+    }
+
     if (entry.request.method !== "POST") continue;
 
     const url = entry.request.url;
@@ -109,6 +123,61 @@ function extractExchanges(har: HarFile): ParsedExchange[] {
       model,
       request,
       responseEvents,
+      requestHeaders: headers,
+    });
+  }
+
+  return exchanges;
+}
+
+function extractWebSocketExchanges(entry: HarEntry): ParsedExchange[] {
+  const exchanges: ParsedExchange[] = [];
+  const wsMessages = entry._webSocketMessages!;
+
+  const headers: Record<string, string> = {};
+  for (const h of entry.request.headers) {
+    headers[h.name.toLowerCase()] = h.value;
+  }
+
+  // Group messages into turns: each "response.create" send starts a new turn,
+  // receive messages until the next send (or end) are its response events.
+  const turns: { send: Record<string, unknown>; sendTime: number; receives: Record<string, unknown>[] }[] = [];
+  let currentTurn: { send: Record<string, unknown>; sendTime: number; receives: Record<string, unknown>[] } | null = null;
+
+  for (const msg of wsMessages) {
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(msg.data);
+    } catch {
+      continue;
+    }
+
+    if (msg.type === "send" && data.type === "response.create") {
+      if (currentTurn) {
+        turns.push(currentTurn);
+      }
+      currentTurn = { send: data, sendTime: msg.time, receives: [] };
+    } else if (msg.type === "receive" && currentTurn) {
+      // Set _event_type from the message's type field so existing
+      // extractOpenAIResponsesAgentStep can process these events
+      data._event_type = data.type;
+      currentTurn.receives.push(data);
+    }
+  }
+  if (currentTurn) {
+    turns.push(currentTurn);
+  }
+
+  for (const turn of turns) {
+    const model = (turn.send.model as string) || "unknown";
+    const timestamp = new Date(turn.sendTime * 1000).toISOString();
+
+    exchanges.push({
+      timestamp,
+      apiFormat: "openai-responses",
+      model,
+      request: turn.send,
+      responseEvents: turn.receives,
       requestHeaders: headers,
     });
   }
