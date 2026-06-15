@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.1](https://github.com/waldekmastykarz/atifact/compare/v0.10.0...v0.10.1)
+
+### Bug Fixes
+
+- Report a HAR trajectory's `agent.model_name` as the model the user selected (a specific model, or `auto` when model routing is used) instead of the most-used model
+
 ## [0.10.0](https://github.com/waldekmastykarz/atifact/compare/v0.9.0...v0.10.0)
 
 ### Features
