@@ -64,9 +64,14 @@ interface RoutingExchange {
 // so only the detection is endpoint-specific, not the representation.
 const ROUTING_PATH_SUFFIX = "/models/session/intent";
 
-export async function parseHar(filePath: string): Promise<ParseResult> {
+export interface HarParseOptions {
+  utilityModels?: string[];
+}
+
+export async function parseHar(filePath: string, options: HarParseOptions = {}): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
   const har: HarFile = JSON.parse(raw);
+  const utilityModels = options.utilityModels || [];
 
   const exchanges = extractExchanges(har);
   if (exchanges.length === 0) {
@@ -78,9 +83,9 @@ export async function parseHar(filePath: string): Promise<ParseResult> {
   // The trajectory-level default model reflects what the user selected for the
   // session (a specific model, or "auto" when model routing is used). Any
   // per-turn model change is reflected on each agent step's own model_name.
-  const selectedModel = detectSelectedModel(exchanges);
-  const agent = buildAgent(exchanges, selectedModel, routingExchanges);
-  const steps = buildSteps(exchanges);
+  const selectedModel = detectSelectedModel(exchanges, utilityModels);
+  const agent = buildAgent(exchanges, selectedModel, routingExchanges, utilityModels);
+  const steps = buildSteps(exchanges, utilityModels);
 
   // Merge in any model-routing steps, ordered by request time so they appear
   // before the turn they route (routing happens before the prompt is sent to
@@ -329,27 +334,26 @@ function parseSseStream(
   return events;
 }
 
-// A utility exchange is a lightweight side-call (e.g. title generation) made on a
-// small/mini model with only a couple of messages — not part of the conversation
-// the user is actually driving.
-function isUtilityExchange(ex: ParsedExchange): boolean {
-  if (!(ex.model.includes("mini") || ex.model.includes("small"))) return false;
-  const messages = (ex.request.messages || ex.request.input) as unknown[];
-  return Array.isArray(messages) && messages.length <= 3;
+// A utility exchange is a lightweight side-call (e.g. title generation) that
+// the user has opted to mark by specifying --utility-model on the CLI.
+function isUtilityExchange(ex: ParsedExchange, utilityModels: string[]): boolean {
+  if (utilityModels.length === 0) return false;
+  return utilityModels.some((m) => ex.model.includes(m));
 }
 
 // The model the user selected for the session: the first non-utility exchange's
 // model. This is the trajectory-level default; a mid-session model change is
 // reflected on the individual agent step's model_name, which overrides this.
-function detectSelectedModel(exchanges: ParsedExchange[]): string {
-  const firstMain = exchanges.find((ex) => !isUtilityExchange(ex));
+function detectSelectedModel(exchanges: ParsedExchange[], utilityModels: string[]): string {
+  const firstMain = exchanges.find((ex) => !isUtilityExchange(ex, utilityModels));
   return firstMain?.model || exchanges[0]?.model || "unknown";
 }
 
 function buildAgent(
   exchanges: ParsedExchange[],
   selectedModel: string,
-  routing: RoutingExchange[] = []
+  routing: RoutingExchange[] = [],
+  utilityModels: string[] = []
 ): Agent {
   const usingRouting = routing.length > 0;
   const agent: Agent = {
@@ -362,7 +366,7 @@ function buildAgent(
   };
 
   // Extract tool definitions from the first main (non-utility) exchange
-  const mainExchange = exchanges.find((e) => !isUtilityExchange(e));
+  const mainExchange = exchanges.find((e) => !isUtilityExchange(e, utilityModels));
   if (mainExchange) {
     const tools = extractToolDefinitions(mainExchange);
     if (tools.length > 0) {
@@ -427,16 +431,16 @@ function extractToolDefinitions(
   });
 }
 
-function buildSteps(exchanges: ParsedExchange[]): Step[] {
+function buildSteps(exchanges: ParsedExchange[], utilityModels: string[]): Step[] {
   const steps: Step[] = [];
 
-  // Group exchanges into conversations (main agent calls vs utility calls)
-  // Utility calls are lightweight models (mini/small) doing title generation etc.
+  // Separate exchanges into main agent calls and utility calls.
+  // When utilityModels is empty, all exchanges are treated as main.
   const mainExchanges: ParsedExchange[] = [];
   const utilityExchanges: ParsedExchange[] = [];
 
   for (const ex of exchanges) {
-    if (isUtilityExchange(ex)) {
+    if (isUtilityExchange(ex, utilityModels)) {
       utilityExchanges.push(ex);
       continue;
     }
@@ -495,6 +499,15 @@ function buildSteps(exchanges: ParsedExchange[]): Step[] {
     if (agentStep) {
       steps.push(agentStep);
       prevAgentStep = agentStep;
+    }
+  }
+
+  // Include utility exchanges as agent steps marked with extra.utility
+  for (const ex of utilityExchanges) {
+    const agentStep = extractAgentStep(ex, 0);
+    if (agentStep) {
+      agentStep.extra = { ...agentStep.extra, utility: true };
+      steps.push(agentStep);
     }
   }
 
@@ -1172,8 +1185,10 @@ function computeFinalMetrics(steps: Step[]): FinalMetrics {
   let totalSteps = 0;
 
   for (const step of steps) {
-    if (step.source === "agent") totalSteps++;
-    if (step.metrics) {
+    const isUtility = step.extra?.utility === true;
+    if (step.source === "agent" && !isUtility) totalSteps++;
+    // Exclude utility steps from token totals
+    if (step.metrics && !isUtility) {
       totalPromptTokens += step.metrics.prompt_tokens || 0;
       totalCompletionTokens += step.metrics.completion_tokens || 0;
       totalCachedTokens += step.metrics.cached_tokens || 0;

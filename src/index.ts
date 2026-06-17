@@ -19,6 +19,7 @@ interface CliOptions {
   format?: InputFormat;
   json: boolean;
   quiet: boolean;
+  utilityModels: string[];
 }
 
 function printHelp(): void {
@@ -37,6 +38,8 @@ OPTIONS
                            Subagent files:   <prefix>.trajectory.<name>.json
   -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl,
                         codex-cli-jsonl (auto-detected if omitted)
+      --utility-model <model>  Mark exchanges matching this model as utility
+                        (repeatable; e.g. --utility-model gpt-4o-mini)
       --json            Write trajectory to stdout with subagents embedded in
                         subagent_trajectories (no files written)
   -q, --quiet           Suppress progress messages (stderr only)
@@ -105,7 +108,8 @@ NOTES
   Format auto-detection inspects file contents, not extension.
   HAR files may contain multiple API formats (OpenAI + Anthropic); all are parsed.
   Multi-turn HAR conversations are deduplicated (each request carries full history).
-  Utility calls (e.g. gpt-4o-mini title generation) are excluded from the trajectory.
+  Utility calls (e.g. gpt-4o-mini title generation) are marked with extra.utility
+  when --utility-model is specified; otherwise all calls are included unmarked.
   Tool results from request N are attached as observations to the agent step from request N-1.
   Output excludes null/undefined fields for compact JSON.
   All timestamps are preserved from source data as-is (ISO 8601).
@@ -120,6 +124,7 @@ function parseArgs(argv: string[]): CliOptions {
   let format: InputFormat | undefined;
   let json = false;
   let quiet = false;
+  const utilityModels: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -152,6 +157,16 @@ function parseArgs(argv: string[]): CliOptions {
         process.exit(2);
       }
       format = fmt as InputFormat;
+      continue;
+    }
+
+    if (arg === "--utility-model") {
+      const model = args[++i];
+      if (!model) {
+        process.stderr.write("Error: --utility-model requires a model name argument\n");
+        process.exit(2);
+      }
+      utilityModels.push(model);
       continue;
     }
 
@@ -191,7 +206,7 @@ function parseArgs(argv: string[]): CliOptions {
     output = resolve(process.cwd(), input);
   }
 
-  return { input: resolve(input), output, format, json, quiet };
+  return { input: resolve(input), output, format, json, quiet, utilityModels };
 }
 
 function log(quiet: boolean, message: string): void {
@@ -254,7 +269,7 @@ async function main(): Promise<void> {
   try {
     switch (inputFormat) {
       case "har":
-        result = await parseHar(opts.input);
+        result = await parseHar(opts.input, { utilityModels: opts.utilityModels });
         break;
       case "claude-code-jsonl":
         result = await parseClaudeCode(opts.input);

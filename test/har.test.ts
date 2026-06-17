@@ -231,27 +231,34 @@ describe("parseHar — multi-turn deduplication", () => {
   });
 });
 
-describe("parseHar — utility call filtering", () => {
-  it("excludes utility model calls from trajectory steps", async () => {
-    const { trajectory: t } = await parseHar(fixture("har-with-utility.har"));
-    const agentSteps = t.steps.filter((s) => s.source === "agent");
-    // Only the main Anthropic call should produce an agent step
-    assert.equal(agentSteps.length, 1);
-    assert.equal(agentSteps[0].model_name, "claude-sonnet-4-20250514");
+describe("parseHar — utility call marking", () => {
+  it("marks utility model calls with extra.utility when utility model specified", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-with-utility.har"), { utilityModels: ["gpt-4o-mini"] });
+    const utilitySteps = t.steps.filter((s) => s.extra?.utility === true);
+    assert.equal(utilitySteps.length, 1);
+    assert.equal(utilitySteps[0].model_name, "gpt-4o-mini");
   });
 
   it("uses the primary (non-utility) model as agent model_name", async () => {
-    const { trajectory: t } = await parseHar(fixture("har-with-utility.har"));
+    const { trajectory: t } = await parseHar(fixture("har-with-utility.har"), { utilityModels: ["gpt-4o-mini"] });
     assert.equal(t.agent.model_name, "claude-sonnet-4-20250514");
   });
 
-  it("does not include gpt-4o-mini content in steps", async () => {
+  it("includes all exchanges when no utility models specified", async () => {
     const { trajectory: t } = await parseHar(fixture("har-with-utility.har"));
-    for (const step of t.steps) {
-      if (step.source === "agent") {
-        assert.notEqual(step.model_name, "gpt-4o-mini");
-      }
-    }
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    // Both gpt-4o-mini and claude-sonnet should appear as agent steps
+    assert.equal(agentSteps.length, 2);
+    assert.ok(agentSteps.every((s) => !s.extra?.utility));
+  });
+
+  it("excludes utility step tokens from final_metrics", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-with-utility.har"), { utilityModels: ["gpt-4o-mini"] });
+    // Only the main (non-utility) step's tokens should be counted
+    const mainStep = t.steps.find((s) => s.source === "agent" && !s.extra?.utility);
+    assert.ok(mainStep?.metrics);
+    assert.equal(t.final_metrics!.total_prompt_tokens, mainStep!.metrics!.prompt_tokens);
+    assert.equal(t.final_metrics!.total_completion_tokens, mainStep!.metrics!.completion_tokens);
   });
 });
 
@@ -412,22 +419,22 @@ describe("parseHar — WebSocket Responses API", () => {
 });
 
 describe("parseHar — mixed HTTP and WebSocket entries", () => {
-  it("filters out utility HTTP calls and uses WebSocket agent model", async () => {
-    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
+  it("marks utility HTTP calls and uses WebSocket agent model", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"), { utilityModels: ["gpt-4o-mini"] });
     assert.equal(t.agent.model_name, "gpt-5.3-codex");
   });
 
-  it("includes only WebSocket agent steps when HTTP calls are utility", async () => {
-    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
-    const agentSteps = t.steps.filter((s) => s.source === "agent");
+  it("marks utility HTTP calls with extra.utility when utility model specified", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"), { utilityModels: ["gpt-4o-mini"] });
+    const agentSteps = t.steps.filter((s) => s.source === "agent" && !s.extra?.utility);
     for (const step of agentSteps) {
       assert.equal(step.model_name, "gpt-5.3-codex");
     }
   });
 
   it("attaches tool results across WebSocket turns", async () => {
-    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"));
-    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    const { trajectory: t } = await parseHar(fixture("har-websocket-mixed.har"), { utilityModels: ["gpt-4o-mini"] });
+    const agentSteps = t.steps.filter((s) => s.source === "agent" && !s.extra?.utility);
     assert.ok(agentSteps[0].observation);
     assert.equal(agentSteps[0].observation!.results[0].source_call_id, "call_mixed1");
     assert.equal(agentSteps[0].observation!.results[0].content, "hello");

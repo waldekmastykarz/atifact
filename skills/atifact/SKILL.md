@@ -106,7 +106,7 @@ atifact session.har --json --quiet | jq '.[0].steps | length'
 
 - HAR files may contain multiple API formats (OpenAI + Anthropic); all are parsed.
 - Multi-turn HAR conversations are deduplicated (each request carries full history).
-- Utility calls (e.g., gpt-4o-mini title generation) are excluded from the trajectory.
+- Utility calls (e.g., gpt-4o-mini title generation) are marked with `extra.utility: true`\n  when `--utility-model` is specified; otherwise all calls are included unmarked.
 - Tool results from request N are attached as observations to the agent step from request N-1.
 - Copilot CLI logs with subagent `task` tool calls produce separate trajectory files per subagent. The main trajectory references them via `subagent_trajectory_ref` with `trajectory_path` pointing to the sibling file.
 - All timestamps are preserved from source data as-is (ISO 8601).
