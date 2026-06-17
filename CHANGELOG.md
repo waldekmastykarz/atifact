@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.0](https://github.com/waldekmastykarz/atifact/compare/v0.10.1...v0.11.0)
+
+### Features
+
+- Add `--utility-model` option to mark utility calls (e.g. title generation) with `extra.utility: true` instead of silently filtering them out. Repeatable flag with no default — all exchanges are included unless explicitly marked.
+
 ## [0.10.1](https://github.com/waldekmastykarz/atifact/compare/v0.10.0...v0.10.1)
 
 ### Bug Fixes
