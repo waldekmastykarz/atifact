@@ -235,8 +235,11 @@ describe("parseHar — utility call marking", () => {
   it("marks utility model calls with extra.utility when utility model specified", async () => {
     const { trajectory: t } = await parseHar(fixture("har-with-utility.har"), { utilityModels: ["gpt-4o-mini"] });
     const utilitySteps = t.steps.filter((s) => s.extra?.utility === true);
-    assert.equal(utilitySteps.length, 1);
-    assert.equal(utilitySteps[0].model_name, "gpt-4o-mini");
+    // Utility exchange produces a system step (input prompt) + agent step (response)
+    assert.equal(utilitySteps.length, 2);
+    assert.equal(utilitySteps[0].source, "system");
+    assert.equal(utilitySteps[1].source, "agent");
+    assert.equal(utilitySteps[1].model_name, "gpt-4o-mini");
   });
 
   it("uses the primary (non-utility) model as agent model_name", async () => {

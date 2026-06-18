@@ -502,14 +502,29 @@ function buildSteps(exchanges: ParsedExchange[], utilityModels: string[]): Step[
     }
   }
 
-  // Include utility exchanges as agent steps marked with extra.utility
+  // Include utility exchanges as system→agent step pairs marked with extra.utility.
+  // The system step carries the prompt sent to the utility model; the agent step
+  // carries the model's response (with metrics).
   for (const ex of utilityExchanges) {
     const agentStep = extractAgentStep(ex, 0);
     if (agentStep) {
+      const inputStep = extractLastUserMessage(ex);
+      if (inputStep) {
+        inputStep.source = "system";
+        inputStep.extra = { utility: true };
+        steps.push(inputStep);
+      }
       agentStep.extra = { ...agentStep.extra, utility: true };
       steps.push(agentStep);
     }
   }
+
+  // Sort all steps by timestamp so utility steps appear in chronological order
+  steps.sort((a, b) => {
+    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return ta - tb;
+  });
 
   // Renumber step IDs sequentially
   for (let i = 0; i < steps.length; i++) {
