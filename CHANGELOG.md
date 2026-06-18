@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.0](https://github.com/waldekmastykarz/atifact/compare/v0.11.0...v0.12.0)
+
+### Features
+
+- Emit the input prompt for utility LLM calls as a separate system step alongside the agent response, giving full visibility into what was sent to utility models
+
 ## [0.11.0](https://github.com/waldekmastykarz/atifact/compare/v0.10.1...v0.11.0)
 
 ### Features
