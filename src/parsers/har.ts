@@ -331,6 +331,19 @@ function parseSseStream(
     }
   }
 
+  // If no SSE events were found, try parsing as a plain JSON response
+  // (non-streaming completions return application/json directly)
+  if (events.length === 0) {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        events.push(JSON.parse(trimmed));
+      } catch {
+        // not valid JSON, skip
+      }
+    }
+  }
+
   return events;
 }
 
@@ -449,20 +462,20 @@ function buildSteps(exchanges: ParsedExchange[], utilityModels: string[]): Step[
 
   // Process main conversation exchanges
   // Each HTTP request carries full history. We only want NEW content per exchange.
-  let systemEmitted = false;
+  const seenSystemPrompts = new Set<string>();
+  const seenUserMessages = new Set<string>();
   let prevAgentStep: Step | null = null;
-  let prevUserMsgCount = 0;
 
   for (let i = 0; i < mainExchanges.length; i++) {
     const exchange = mainExchanges[i];
 
-    // Extract system prompt (only from first exchange)
-    if (!systemEmitted) {
-      const systemStep = extractSystemStep(exchange);
-      if (systemStep) {
-        steps.push(systemStep);
-        systemEmitted = true;
-      }
+    // Extract system prompt — emit only when content is new (not seen before).
+    // This handles multi-model HARs where different conversations have different
+    // system prompts without a positional flag stealing the slot.
+    const systemStep = extractSystemStep(exchange);
+    if (systemStep && !seenSystemPrompts.has(systemStep.message as string)) {
+      seenSystemPrompts.add(systemStep.message as string);
+      steps.push(systemStep);
     }
 
     // Attach tool results from this request to the PREVIOUS agent step
@@ -482,17 +495,14 @@ function buildSteps(exchanges: ParsedExchange[], utilityModels: string[]): Step[
       }
     }
 
-    // Only emit a user step when the count of real (non-tool-result) user
-    // messages has increased compared to the previous exchange — that means
-    // a genuinely new user message was added, not just replayed context.
-    const currentUserMsgCount = countNonToolUserMessages(exchange);
-    if (currentUserMsgCount > prevUserMsgCount) {
-      const userMessage = extractLastUserMessage(exchange);
-      if (userMessage) {
-        steps.push({ ...userMessage, step_id: 0 }); // step_id renumbered later
-      }
+    // Only emit a user step when its content hasn't been seen before.
+    // This handles multi-model HARs where different conversations have different
+    // user messages without a positional counter being polluted across them.
+    const userMessage = extractLastUserMessage(exchange);
+    if (userMessage && !seenUserMessages.has(userMessage.message as string)) {
+      seenUserMessages.add(userMessage.message as string);
+      steps.push({ ...userMessage, step_id: 0 }); // step_id renumbered later
     }
-    prevUserMsgCount = currentUserMsgCount;
 
     // Extract agent response from SSE events
     const agentStep = extractAgentStep(exchange, 0);
@@ -1100,13 +1110,15 @@ function extractOpenAIChatAgentStep(
   > = new Map();
 
   for (const event of events) {
-    // Skip prompt filter results
-    if (event.prompt_filter_results) continue;
+    // Skip prompt filter results that don't carry choices (Azure SSE emits these
+    // as separate events, but non-streaming responses include them alongside choices)
+    if (event.prompt_filter_results && !event.choices) continue;
 
     const choices = event.choices as Record<string, unknown>[];
     if (choices && choices.length > 0) {
       const choice = choices[0];
-      const delta = choice.delta as Record<string, unknown>;
+      // Handle both streaming (delta) and non-streaming (message) response formats
+      const delta = (choice.delta || choice.message) as Record<string, unknown>;
 
       if (delta) {
         if (delta.content && typeof delta.content === "string") {

@@ -508,3 +508,74 @@ describe("parseHar — model routing", () => {
     assert.equal(agentStep.model_name, "gpt-5.3-codex");
   });
 });
+
+describe("parseHar — multi-model HAR without utility-model flag", () => {
+  // HAR contains a gpt-4o-mini title-generation call AND two claude-opus-4.6
+  // agent calls (tool call + final response). Without --utility-model, all
+  // exchanges must still be captured correctly using content-based dedup.
+
+  it("emits the main agent system prompt (not the title-gen one)", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-copilot-cli-multimodel.har"));
+    const systemSteps = t.steps.filter((s) => s.source === "system" && !s.extra?.utility);
+    // The main system prompt starts with "You are the GitHub Copilot CLI"
+    const mainSystem = systemSteps.find((s) =>
+      (s.message as string).includes("You are the GitHub Copilot CLI")
+    );
+    assert.ok(mainSystem, "main agent system prompt should be present in trajectory");
+  });
+
+  it("emits the user message from the main conversation", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-copilot-cli-multimodel.har"));
+    const userSteps = t.steps.filter((s) => s.source === "user");
+    const mainUser = userSteps.find((s) =>
+      (s.message as string).includes("Get SPFx v1.23.0 information")
+    );
+    assert.ok(mainUser, "main user message should be present in trajectory");
+  });
+
+  it("captures tool call and observation from the agent", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-copilot-cli-multimodel.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    const toolCallStep = agentSteps.find((s) => s.tool_calls && s.tool_calls.length > 0);
+    assert.ok(toolCallStep, "should have an agent step with tool calls");
+    assert.equal(toolCallStep!.tool_calls![0].function_name, "web_fetch");
+    // The observation (tool result) should be attached
+    assert.ok(toolCallStep!.observation, "tool result should be attached as observation");
+    assert.ok(
+      (toolCallStep!.observation!.results[0].content as string).length > 0,
+      "observation should have content"
+    );
+  });
+
+  it("captures the final agent response about SPFx", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-copilot-cli-multimodel.har"));
+    const agentSteps = t.steps.filter((s) => s.source === "agent");
+    const finalStep = agentSteps[agentSteps.length - 1];
+    assert.ok(
+      (finalStep.message as string).includes("SPFx"),
+      "final agent response should mention SPFx"
+    );
+  });
+
+  it("does not lose steps due to cross-conversation interference", async () => {
+    const { trajectory: t } = await parseHar(fixture("har-copilot-cli-multimodel.har"));
+    // Minimum expected: system + user + agent(tool call) + agent(final)
+    // The title-gen call may also appear, which is fine
+    const mainSystem = t.steps.find(
+      (s) => s.source === "system" && (s.message as string).includes("Copilot CLI")
+    );
+    const mainUser = t.steps.find(
+      (s) => s.source === "user" && (s.message as string).includes("SPFx")
+    );
+    const mainAgentWithTools = t.steps.find(
+      (s) => s.source === "agent" && s.tool_calls && s.tool_calls.length > 0
+    );
+    const mainAgentFinal = t.steps.find(
+      (s) => s.source === "agent" && (s.message as string || "").includes("SPFx")
+    );
+    assert.ok(mainSystem, "system prompt must be present");
+    assert.ok(mainUser, "user message must be present");
+    assert.ok(mainAgentWithTools, "agent tool-call step must be present");
+    assert.ok(mainAgentFinal, "agent final response must be present");
+  });
+});

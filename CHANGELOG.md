@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/waldekmastykarz/atifact/compare/v0.12.0...v0.12.1)
+
+### Bug Fixes
+
+- Fix multi-model HARs losing system prompts and user messages when a utility call (e.g. title generation) appears before the main conversation
+- Support non-streaming OpenAI chat completion responses (`application/json`) that were previously silently dropped
+
 ## [0.12.0](https://github.com/waldekmastykarz/atifact/compare/v0.11.0...v0.12.0)
 
 ### Features
