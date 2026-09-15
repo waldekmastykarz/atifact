@@ -8,6 +8,7 @@ import { parseHar } from "./parsers/har.js";
 import { parseClaudeCode } from "./parsers/claude-code.js";
 import { parseCopilotCli } from "./parsers/copilot-cli.js";
 import { parseCodexCli } from "./parsers/codex-cli.js";
+import { parseVally } from "./parsers/vally.js";
 import type { InputFormat, ParseResult } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -30,14 +31,14 @@ USAGE
   atifact --help | --version
 
 ARGUMENTS
-  <input-file>    Path to the input file (.har or .jsonl)
+  <input-file>    Path to the input file (.har, .json, or .jsonl)
 
 OPTIONS
   -o, --output <prefix>   Output path prefix (default: <input>)
                            Main trajectory:  <prefix>.trajectory.json
                            Subagent files:   <prefix>.trajectory.<name>.json
   -f, --format <fmt>    Force input format: har, claude-code-jsonl, copilot-cli-jsonl,
-                        codex-cli-jsonl (auto-detected if omitted)
+                        codex-cli-jsonl, vally-json (auto-detected if omitted)
       --utility-model <model>  Mark exchanges matching this model as utility
                         (repeatable; e.g. --utility-model gpt-4o-mini)
       --json            Write trajectory to stdout with subagents embedded in
@@ -52,6 +53,7 @@ SUPPORTED INPUT FORMATS
   claude-code-jsonl  Claude Code CLI session logs (.jsonl)
   copilot-cli-jsonl  Copilot CLI session logs (.jsonl)
   codex-cli-jsonl    Codex CLI exec --json logs (.jsonl)
+  vally-json         Standalone Vally Trajectory objects (.json)
 
 EXAMPLES
   atifact session.har                          Convert, write to session.trajectory.json
@@ -60,6 +62,7 @@ EXAMPLES
   atifact session.har --json --quiet           JSON to stdout, no diagnostics
   atifact claude-log.jsonl -f claude-code-jsonl        Force format
   atifact copilot.jsonl                        Write main + subagent trajectory files
+  atifact vally-trajectory.json --json          Convert a Vally trajectory
 
 JSON OUTPUT SCHEMA (ATIF v1.7)
   {
@@ -150,9 +153,9 @@ function parseArgs(argv: string[]): CliOptions {
 
     if (arg === "-f" || arg === "--format") {
       const fmt = args[++i];
-      if (!fmt || !["har", "claude-code-jsonl", "copilot-cli-jsonl", "codex-cli-jsonl"].includes(fmt)) {
+      if (!fmt || !["har", "claude-code-jsonl", "copilot-cli-jsonl", "codex-cli-jsonl", "vally-json"].includes(fmt)) {
         process.stderr.write(
-          `Error: Invalid format "${fmt || ""}". Valid values: har, claude-code-jsonl, copilot-cli-jsonl, codex-cli-jsonl\n`
+          `Error: Invalid format "${fmt || ""}". Valid values: har, claude-code-jsonl, copilot-cli-jsonl, codex-cli-jsonl, vally-json\n`
         );
         process.exit(2);
       }
@@ -279,6 +282,9 @@ async function main(): Promise<void> {
         break;
       case "codex-cli-jsonl":
         result = await parseCodexCli(opts.input);
+        break;
+      case "vally-json":
+        result = await parseVally(opts.input);
         break;
       default:
         process.stderr.write(

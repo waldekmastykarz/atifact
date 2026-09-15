@@ -1,7 +1,7 @@
 {
   "name": "atifact",
   "version": "0.12.1",
-  "description": "Convert HAR files and Claude Code CLI logs to ATIF-format agent trajectories",
+  "description": "Convert agent logs and Vally trajectories to ATIF-format agent trajectories",
   "type": "module",
   "bin": {
     "atifact": "dist/src/index.js"
@@ -34,6 +34,7 @@
     "trajectory",
     "har",
     "claude-code",
+    "vally",
     "agent",
     "llm"
   ],

@@ -5,6 +5,11 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
   const content = await readFile(filePath, "utf-8");
   const firstLine = content.trimStart().slice(0, 4096);
 
+  // JSON: standalone Vally Trajectory object
+  if (looksLikeVallyJson(content)) {
+    return { format: "vally-json", description: "Vally trajectory (JSON)" };
+  }
+
   // JSONL: early lines contain a system/init JSON object (Claude Code format)
   if (looksLikeClaudeCodeJsonl(firstLine)) {
     return {
@@ -36,8 +41,30 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
 
   throw new Error(
     `Unable to detect input format for: ${filePath}\n` +
-      `Supported formats: HAR (.har), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl), Codex CLI logs (.jsonl)`
+      `Supported formats: HAR (.har), Vally trajectories (.json), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl), Codex CLI logs (.jsonl)`
   );
+}
+
+function looksLikeVallyJson(content: string): boolean {
+  try {
+    const parsed = JSON.parse(content);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      typeof parsed.id === "string" &&
+      Array.isArray(parsed.events) &&
+      typeof parsed.metrics === "object" &&
+      parsed.metrics !== null &&
+      typeof parsed.output === "string" &&
+      typeof parsed.workDir === "string" &&
+      typeof parsed.metadata === "object" &&
+      parsed.metadata !== null &&
+      typeof parsed.metadata.sessionID === "string"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function looksLikeClaudeCodeJsonl(content: string): boolean {

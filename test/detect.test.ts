@@ -44,6 +44,11 @@ describe("detectFormat", () => {
     assert.equal(result.format, "codex-cli-jsonl");
   });
 
+  it("detects a Vally trajectory JSON object", async () => {
+    const result = await detectFormat(fixture("vally-simple.json"));
+    assert.equal(result.format, "vally-json");
+  });
+
   it("throws on unknown format", async () => {
     await assert.rejects(
       () => detectFormat(fixture("unknown-format.txt")),

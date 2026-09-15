@@ -86,6 +86,7 @@ export interface Metrics {
   prompt_tokens?: number;
   completion_tokens?: number;
   cached_tokens?: number;
+  cache_write_tokens?: number;
   cost_usd?: number;
   prompt_token_ids?: number[];
   completion_token_ids?: number[];
@@ -97,6 +98,7 @@ export interface FinalMetrics {
   total_prompt_tokens?: number;
   total_completion_tokens?: number;
   total_cached_tokens?: number;
+  total_cache_write_tokens?: number;
   total_cost_usd?: number;
   total_steps?: number;
   extra?: Record<string, unknown>;
@@ -111,7 +113,12 @@ export interface ParseResult {
 
 // Input format types
 
-export type InputFormat = "har" | "claude-code-jsonl" | "copilot-cli-jsonl" | "codex-cli-jsonl";
+export type InputFormat =
+  | "har"
+  | "claude-code-jsonl"
+  | "copilot-cli-jsonl"
+  | "codex-cli-jsonl"
+  | "vally-json";
 
 export interface DetectedFormat {
   format: InputFormat;

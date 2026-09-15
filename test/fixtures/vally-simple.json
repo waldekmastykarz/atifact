@@ -1,0 +1,123 @@
+{
+  "id": "trial-001",
+  "stimulus": {
+    "name": "write-tests",
+    "prompt": "Write tests for add()"
+  },
+  "events": [
+    {
+      "type": "user_message",
+      "timestamp": "2026-09-15T10:00:00.000Z",
+      "turn": 0,
+      "data": { "content": "Write tests for add()", "agent_mode": "autopilot" }
+    },
+    {
+      "type": "turn_start",
+      "timestamp": "2026-09-15T10:00:01.000Z",
+      "turn": 0,
+      "data": { "turnId": "turn-0" }
+    },
+    {
+      "type": "reasoning",
+      "timestamp": "2026-09-15T10:00:01.100Z",
+      "turn": 0,
+      "data": { "content": "Inspect the implementation first." }
+    },
+    {
+      "type": "assistant_message",
+      "timestamp": "2026-09-15T10:00:01.200Z",
+      "turn": 0,
+      "data": { "content": "I'll inspect the file." }
+    },
+    {
+      "type": "tool_call",
+      "timestamp": "2026-09-15T10:00:01.300Z",
+      "turn": 0,
+      "data": {
+        "toolName": "read_file",
+        "toolCallId": "call-1",
+        "turnId": "turn-0",
+        "arguments": { "path": "src/add.ts" },
+        "launchedAgentIds": ["researcher"]
+      }
+    },
+    {
+      "type": "tool_result",
+      "timestamp": "2026-09-15T10:00:01.400Z",
+      "turn": 0,
+      "data": {
+        "toolName": "read_file",
+        "toolCallId": "call-1",
+        "success": true,
+        "result": { "content": "export const add = (a, b) => a + b;" }
+      }
+    },
+    {
+      "type": "token_usage",
+      "timestamp": "2026-09-15T10:00:01.500Z",
+      "turn": 0,
+      "data": {
+        "inputTokens": 100,
+        "outputTokens": 20,
+        "cacheReadTokens": 40,
+        "cacheWriteTokens": 5,
+        "model": "gpt-5.5",
+        "cost": { "provider": "github-copilot", "unit": "nano-aiu", "amount": 12 }
+      }
+    },
+    {
+      "type": "turn_end",
+      "timestamp": "2026-09-15T10:00:02.000Z",
+      "turn": 0,
+      "data": { "turnId": "turn-0" }
+    },
+    {
+      "type": "system",
+      "timestamp": "2026-09-15T10:00:03.000Z",
+      "data": {
+        "eventType": "compaction",
+        "message": "Compacted context",
+        "observation": "Removed 10 messages",
+        "details": { "messagesRemoved": 10 }
+      }
+    },
+    {
+      "type": "assistant_message",
+      "timestamp": "2026-09-15T10:00:01.350Z",
+      "turn": 0,
+      "agentId": "researcher",
+      "data": { "content": "The implementation is in src/add.ts." }
+    }
+  ],
+  "metrics": {
+    "tokenUsage": {
+      "inputTokens": 100,
+      "outputTokens": 20,
+      "totalTokens": 120,
+      "cacheReadTokens": 40,
+      "cacheWriteTokens": 5,
+      "callCount": 1,
+      "cost": { "provider": "github-copilot", "unit": "nano-aiu", "amount": 12 },
+      "byModel": { "gpt-5.5": { "inputTokens": 100, "outputTokens": 20, "callCount": 1 } }
+    },
+    "toolCallCount": 1,
+    "toolCallBreakdown": { "read_file": 1 },
+    "simulatedToolCallCount": 0,
+    "skillActivationCount": 0,
+    "skillActivationBreakdown": {},
+    "turnCount": 1,
+    "wallTimeMs": 3000,
+    "errorCount": 0
+  },
+  "output": "Tests added.",
+  "workDir": "/workspace",
+  "diff": "diff --git a/test.ts b/test.ts",
+  "metadata": {
+    "model": "gpt-5.5",
+    "skillsLoaded": [],
+    "startedAt": "2026-09-15T10:00:00.000Z",
+    "completedAt": "2026-09-15T10:00:03.000Z",
+    "executor": "copilot-sdk",
+    "sessionID": "session-001"
+  }
+}

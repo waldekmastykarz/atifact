@@ -117,6 +117,20 @@ describe("CLI integration", () => {
     assert.ok(trajectory.steps.length > 0);
   });
 
+  it("converts a Vally trajectory to ATIF with --json", async () => {
+    const { stdout } = await exec("node", [
+      cli,
+      fixture("vally-simple.json"),
+      "--json",
+      "--quiet",
+    ]);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.session_id, "session-001");
+    assert.equal(trajectory.agent.name, "copilot-sdk");
+    assert.equal(trajectory.subagent_trajectories[0].trajectory_id, "researcher");
+  });
+
   it("writes output to file by default", async () => {
     const input = fixture("claude-code-simple.jsonl");
     const outputPrefix = resolve(
@@ -152,6 +166,19 @@ describe("CLI integration", () => {
     ]);
     const trajectories = JSON.parse(stdout);
     assert.equal(trajectories.agent.name, "claude-code");
+  });
+
+  it("accepts vally-json as a forced format", async () => {
+    const { stdout } = await exec("node", [
+      cli,
+      fixture("vally-simple.json"),
+      "--json",
+      "--quiet",
+      "-f",
+      "vally-json",
+    ]);
+    const trajectory = JSON.parse(stdout);
+    assert.equal(trajectory.trajectory_id, "trial-001");
   });
 
   it("strips undefined/null fields from output", async () => {

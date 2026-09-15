@@ -4,7 +4,7 @@
 
 Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-format) trajectories. One command. Zero dependencies.
 
-Turn HAR files, Claude Code logs, Copilot CLI logs, and Codex CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
+Turn HAR files, Vally trajectories, Claude Code logs, Copilot CLI logs, and Codex CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
 ![A terminal session on a macOS desktop showing the atifact CLI tool in action. Two commands are displayed against a dark background. The first command runs: atifact copilot-cli-subagent.jsonl — the output shows: Detecting input format..., Detected: Copilot CLI logs (JSONL), Parsing copilot-cli-jsonl..., followed by two Wrote lines confirming trajectory files were saved, and a summary: Done. 3 steps, 2 agent turns, 1 subagent trajectories. The second command runs: cat copilot-cli-subagent.jsonl.trajectory.json — showing a JSON object with fields including schema_version: ATIF-v1.7, session_id: session-subagent-001, an agent block with name: copilot-cli, version: 1.0.0, model_name: claude-opus-4.6-1m, and a steps array beginning with step_id: 1, timestamp: 2026-03-25T16:29:11.000Z, source: user, message: Explore the project structure. The status bar at the bottom shows version v24.15.0, the file path, branch main, and a change count of +137. The overall tone is functional and developer-focused.](assets/screenshot.png)
 
@@ -39,6 +39,9 @@ atifact copilot-session.jsonl
 # Convert Codex CLI logs
 atifact codex-session.jsonl
 
+# Convert a standalone Vally Trajectory object
+atifact vally-trajectory.json
+
 # Pipe to stdout (returns JSON array of trajectories)
 atifact session.har --json | jq '.steps | length'
 ```
@@ -55,6 +58,7 @@ Output: `<input>.trajectory.json` in ATIF v1.7 format. Copilot CLI and Codex CLI
 | JSONL | Claude Code CLI session logs | `claude-code-jsonl` |
 | JSONL | Copilot CLI session logs | `copilot-cli-jsonl` |
 | JSONL | Codex CLI `exec --json` logs | `codex-cli-jsonl` |
+| JSON | Vally `Trajectory` object | `vally-json` |
 
 Format is auto-detected from file contents (not extension). Force it with `-f`:
 
@@ -62,6 +66,7 @@ Format is auto-detected from file contents (not extension). Force it with `-f`:
 atifact myfile.log -f claude-code-jsonl
 atifact myfile.log -f copilot-cli-jsonl
 atifact myfile.log -f codex-cli-jsonl
+atifact trajectory.json -f vally-json
 ```
 
 ## Usage
@@ -73,7 +78,7 @@ atifact <input-file> [options]
 | Option | Description |
 |---|---|
 | `-o, --output <prefix>` | Output path prefix (default: input file path). Main: `<prefix>.trajectory.json`, subagents: `<prefix>.trajectory.<name>.json` |
-| `-f, --format <fmt>` | Force input format: `har`, `claude-code-jsonl`, `copilot-cli-jsonl`, `codex-cli-jsonl` |
+| `-f, --format <fmt>` | Force input format: `har`, `claude-code-jsonl`, `copilot-cli-jsonl`, `codex-cli-jsonl`, `vally-json` |
 | `--json` | Write trajectory to stdout with subagents embedded (no files written) |
 | `-q, --quiet` | Suppress progress messages |
 | `-h, --help` | Show help |
@@ -127,6 +132,13 @@ atifact copilot-session.jsonl
 ```sh
 atifact codex-session.jsonl
 # Writes: codex-session.jsonl.trajectory.json
+```
+
+### Vally → trajectory
+
+```sh
+atifact vally-trajectory.json
+# Writes: vally-trajectory.json.trajectory.json
 ```
 
 ### Count agent steps
