@@ -102,7 +102,14 @@ type CodexLine =
 
 export async function parseCodexCli(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
-  const lines = raw
+  return parseCodexCliContent(raw, filePath);
+}
+
+export function parseCodexCliContent(
+  content: string,
+  sourceName = "in-memory input"
+): ParseResult {
+  const lines = content
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as CodexLine);
@@ -144,7 +151,7 @@ export async function parseCodexCli(filePath: string): Promise<ParseResult> {
     agent,
     steps,
     final_metrics: finalMetrics,
-    notes: `Converted from Codex CLI logs: ${filePath}`,
+    notes: `Converted from Codex CLI logs: ${sourceName}`,
   };
 
   return {

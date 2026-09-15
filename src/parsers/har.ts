@@ -70,7 +70,15 @@ export interface HarParseOptions {
 
 export async function parseHar(filePath: string, options: HarParseOptions = {}): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
-  const har: HarFile = JSON.parse(raw);
+  return parseHarContent(raw, options, filePath);
+}
+
+export function parseHarContent(
+  content: string,
+  options: HarParseOptions = {},
+  sourceName = "in-memory input"
+): ParseResult {
+  const har: HarFile = JSON.parse(content);
   const utilityModels = options.utilityModels || [];
 
   const exchanges = extractExchanges(har);
@@ -105,7 +113,7 @@ export async function parseHar(filePath: string, options: HarParseOptions = {}):
       agent,
       steps: mergedSteps,
       final_metrics: finalMetrics,
-      notes: `Converted from HAR file: ${filePath}`,
+      notes: `Converted from HAR file: ${sourceName}`,
     },
   };
 }

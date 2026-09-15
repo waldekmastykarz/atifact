@@ -5,6 +5,7 @@
 ### Features
 
 - Add conversion of standalone Vally `Trajectory` JSON objects to ATIF
+- Add a programmatic API for converting in-memory content or files
 
 ## [0.12.1](https://github.com/waldekmastykarz/atifact/compare/v0.12.0...v0.12.1)
 

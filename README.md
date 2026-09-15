@@ -50,6 +50,42 @@ Output: `<input>.trajectory.json` in ATIF v1.7 format. Copilot CLI and Codex CLI
 
 `--json` mode outputs a single trajectory with subagents embedded in the `subagent_trajectories` array to stdout with no files written.
 
+## Programmatic API
+
+Install atifact as a project dependency:
+
+```sh
+npm install atifact
+```
+
+Convert serialized log content directly from memory:
+
+```ts
+import { convert } from "atifact";
+
+const { trajectory, subagentTrajectories } = await convert(jsonlContent);
+```
+
+Strings are treated as content, not file paths. `Uint8Array` input is also supported. Use `convertFile` to read from a path:
+
+```ts
+import { convertFile } from "atifact";
+
+const result = await convertFile("session.jsonl");
+```
+
+Both functions detect the input format by default. The format can be forced and a source name can be included in the trajectory notes:
+
+```ts
+const result = await convert(content, {
+	format: "har",
+	utilityModels: ["gpt-4o-mini"],
+	sourceName: "captured request",
+});
+```
+
+Use `detectFormat(content)` for in-memory input or `await detectFileFormat(path)` for a file. The package exports the ATIF trajectory and parser result TypeScript types alongside these functions.
+
 ## Supported inputs
 
 | Format | Source | Flag |

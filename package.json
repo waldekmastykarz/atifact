@@ -3,6 +3,12 @@
   "version": "0.12.1",
   "description": "Convert agent logs and Vally trajectories to ATIF-format agent trajectories",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/api.d.ts",
+      "import": "./dist/src/api.js"
+    }
+  },
   "bin": {
     "atifact": "dist/src/index.js"
   },

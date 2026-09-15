@@ -109,7 +109,14 @@ type ClaudeCodeLine =
 
 export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
-  const lines = raw
+  return parseClaudeCodeContent(raw, filePath);
+}
+
+export function parseClaudeCodeContent(
+  content: string,
+  sourceName = "in-memory input"
+): ParseResult {
+  const lines = content
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as ClaudeCodeLine);
@@ -137,7 +144,7 @@ export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
       agent,
       steps,
       final_metrics: finalMetrics,
-      notes: `Converted from Claude Code CLI logs: ${filePath}`,
+      notes: `Converted from Claude Code CLI logs: ${sourceName}`,
     },
   };
 }

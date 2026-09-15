@@ -3,6 +3,13 @@ import type { DetectedFormat } from "./types.js";
 
 export async function detectFormat(filePath: string): Promise<DetectedFormat> {
   const content = await readFile(filePath, "utf-8");
+  return detectContentFormat(content, filePath);
+}
+
+export function detectContentFormat(
+  content: string,
+  sourceName = "in-memory input"
+): DetectedFormat {
   const firstLine = content.trimStart().slice(0, 4096);
 
   // JSON: standalone Vally Trajectory object
@@ -40,7 +47,7 @@ export async function detectFormat(filePath: string): Promise<DetectedFormat> {
   }
 
   throw new Error(
-    `Unable to detect input format for: ${filePath}\n` +
+    `Unable to detect input format for: ${sourceName}\n` +
       `Supported formats: HAR (.har), Vally trajectories (.json), Claude Code CLI logs (.jsonl), Copilot CLI logs (.jsonl), Codex CLI logs (.jsonl)`
   );
 }

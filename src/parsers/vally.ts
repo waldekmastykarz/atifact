@@ -52,7 +52,14 @@ interface AgentStepBuilder {
 
 export async function parseVally(filePath: string): Promise<ParseResult> {
   const raw = await readFile(filePath, "utf-8");
-  const input = validateVallyTrajectory(JSON.parse(raw));
+  return parseVallyContent(raw, filePath);
+}
+
+export function parseVallyContent(
+  content: string,
+  sourceName = "in-memory input"
+): ParseResult {
+  const input = validateVallyTrajectory(JSON.parse(content));
   const agent = buildAgent(input);
   const subagentIds = collectSubagentIds(input.events);
   const subagentTrajectories = new Map<string, Trajectory>();
@@ -77,7 +84,7 @@ export async function parseVally(filePath: string): Promise<ParseResult> {
         model_name: input.metadata.model,
       },
       steps: subagentSteps,
-      notes: `Converted from Vally subagent events: ${filePath}`,
+      notes: `Converted from Vally subagent events: ${sourceName}`,
     });
   }
 
@@ -99,7 +106,7 @@ export async function parseVally(filePath: string): Promise<ParseResult> {
     agent,
     steps,
     final_metrics: buildFinalMetrics(input.metrics, steps),
-    notes: `Converted from Vally trajectory: ${filePath}`,
+    notes: `Converted from Vally trajectory: ${sourceName}`,
     extra: { vally: buildVallyExtra(input) },
   };
 

@@ -4,11 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, basename, dirname } from "node:path";
 import { createRequire } from "node:module";
 import { detectFormat } from "./detect.js";
-import { parseHar } from "./parsers/har.js";
-import { parseClaudeCode } from "./parsers/claude-code.js";
-import { parseCopilotCli } from "./parsers/copilot-cli.js";
-import { parseCodexCli } from "./parsers/codex-cli.js";
-import { parseVally } from "./parsers/vally.js";
+import { convertFile } from "./api.js";
 import type { InputFormat, ParseResult } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -270,29 +266,10 @@ async function main(): Promise<void> {
   let result: ParseResult;
 
   try {
-    switch (inputFormat) {
-      case "har":
-        result = await parseHar(opts.input, { utilityModels: opts.utilityModels });
-        break;
-      case "claude-code-jsonl":
-        result = await parseClaudeCode(opts.input);
-        break;
-      case "copilot-cli-jsonl":
-        result = await parseCopilotCli(opts.input);
-        break;
-      case "codex-cli-jsonl":
-        result = await parseCodexCli(opts.input);
-        break;
-      case "vally-json":
-        result = await parseVally(opts.input);
-        break;
-      default:
-        process.stderr.write(
-          `Error: Unsupported format "${inputFormat}"\n`
-        );
-        process.exit(1);
-        return;
-    }
+    result = await convertFile(opts.input, {
+      format: inputFormat,
+      utilityModels: opts.utilityModels,
+    });
   } catch (err) {
     process.stderr.write(
       `Error: Failed to parse ${inputFormat}: ${(err as Error).message}\n`
