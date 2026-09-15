@@ -12,7 +12,7 @@ describe("parseCodexCli", () => {
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseCodexCli(fixture("codex-cli-simple.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.7");
+      assert.equal(t.schema_version, "ATIF-v1.8");
       assert.equal(t.session_id, "019e97e4-ba5c-7680-85c2-3399e3b68eaf");
     });
 
@@ -125,7 +125,7 @@ describe("parseCodexCli", () => {
     it("builds subagent trajectory stubs with correct session_id", async () => {
       const { subagentTrajectories } = await parseCodexCli(fixture("codex-cli-simple.jsonl"));
       const sub = subagentTrajectories!.get("019e97e5-12a9-7ed3-b7c9-a50c9fabbeab")!;
-      assert.equal(sub.schema_version, "ATIF-v1.7");
+      assert.equal(sub.schema_version, "ATIF-v1.8");
       assert.equal(
         sub.session_id,
         "019e97e4-ba5c-7680-85c2-3399e3b68eaf:019e97e5-12a9-7ed3-b7c9-a50c9fabbeab"
@@ -146,7 +146,7 @@ describe("parseCodexCli", () => {
   describe("subagent fixture", () => {
     it("produces valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseCodexCli(fixture("codex-cli-subagent.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.7");
+      assert.equal(t.schema_version, "ATIF-v1.8");
       assert.equal(t.session_id, "019e-main-thread");
     });
 

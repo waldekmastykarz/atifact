@@ -8,6 +8,8 @@ import {
   convertFile,
   detectFileFormat,
   detectFormat,
+  type AudioSource,
+  type ContentPart,
 } from "../src/api.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,13 +17,24 @@ const projectRoot = resolve(__dirname, "..", "..");
 const fixture = (name: string) => resolve(projectRoot, "test", "fixtures", name);
 
 describe("programmatic API", () => {
+  it("exports ATIF v1.8 audio content types", () => {
+    const source: AudioSource = {
+      media_type: "audio/wav",
+      path: "audio/question.wav",
+      duration_sec: 3.2,
+    };
+    const part: ContentPart = { type: "audio", source };
+
+    assert.deepEqual(part, { type: "audio", source });
+  });
+
   it("detects and converts in-memory text", async () => {
     const content = await readFile(fixture("claude-code-simple.jsonl"), "utf-8");
 
     assert.equal(detectFormat(content).format, "claude-code-jsonl");
     const { trajectory } = await convert(content);
 
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "sess-abc123");
     assert.equal(trajectory.notes, "Converted from Claude Code CLI logs: in-memory input");
   });

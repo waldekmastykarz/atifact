@@ -1,4 +1,4 @@
-// ATIF v1.7 types
+// ATIF v1.8 types
 
 export interface Trajectory {
   schema_version: string;
@@ -46,15 +46,28 @@ export interface Step {
   is_copied_context?: boolean;
 }
 
-export interface ContentPart {
-  type: "text" | "image";
-  text?: string;
-  source?: ImageSource;
-}
+export type ContentPart =
+  | { type: "text"; text: string; source?: never }
+  | { type: "image"; source: ImageSource; text?: never }
+  | { type: "audio"; source: AudioSource; text?: never };
 
 export interface ImageSource {
   media_type: string;
   path: string;
+}
+
+export interface AudioSource {
+  media_type:
+    | "audio/wav"
+    | "audio/mpeg"
+    | "audio/mp4"
+    | "audio/aac"
+    | "audio/ogg"
+    | "audio/flac"
+    | "audio/webm"
+    | "audio/aiff";
+  path: string;
+  duration_sec?: number;
 }
 
 export interface ToolCall {

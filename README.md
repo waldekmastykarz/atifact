@@ -4,9 +4,9 @@
 
 Convert agent logs to [ATIF](https://harborframework.com/docs/agents/trajectory-format) trajectories. One command. Zero dependencies.
 
-Turn HAR files, Vally trajectories, Claude Code logs, Copilot CLI logs, and Codex CLI logs into standardized [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
+Turn HAR files, Vally trajectories, Claude Code logs, Copilot CLI logs, and Codex CLI logs into standardized [ATIF v1.8](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) trajectory JSON — ready for debugging, visualization, fine-tuning, and RL pipelines.
 
-![A terminal session on a macOS desktop showing the atifact CLI tool in action. Two commands are displayed against a dark background. The first command runs: atifact copilot-cli-subagent.jsonl — the output shows: Detecting input format..., Detected: Copilot CLI logs (JSONL), Parsing copilot-cli-jsonl..., followed by two Wrote lines confirming trajectory files were saved, and a summary: Done. 3 steps, 2 agent turns, 1 subagent trajectories. The second command runs: cat copilot-cli-subagent.jsonl.trajectory.json — showing a JSON object with fields including schema_version: ATIF-v1.7, session_id: session-subagent-001, an agent block with name: copilot-cli, version: 1.0.0, model_name: claude-opus-4.6-1m, and a steps array beginning with step_id: 1, timestamp: 2026-03-25T16:29:11.000Z, source: user, message: Explore the project structure. The status bar at the bottom shows version v24.15.0, the file path, branch main, and a change count of +137. The overall tone is functional and developer-focused.](assets/screenshot.png)
+![A terminal session on a macOS desktop showing the atifact CLI converting Copilot CLI logs and printing the resulting trajectory JSON.](assets/screenshot.png)
 
 ## Use with AI agents
 
@@ -46,7 +46,7 @@ atifact vally-trajectory.json
 atifact session.har --json | jq '.steps | length'
 ```
 
-Output: `<input>.trajectory.json` in ATIF v1.7 format. Copilot CLI and Codex CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
+Output: `<input>.trajectory.json` in ATIF v1.8 format. Copilot CLI and Codex CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
 
 `--json` mode outputs a single trajectory with subagents embedded in the `subagent_trajectories` array to stdout with no files written.
 
@@ -130,7 +130,7 @@ atifact <input-file> [options]
 
 ## Output format
 
-atifact produces [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) JSON with:
+atifact produces [ATIF v1.8](https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md) JSON with:
 
 - **Steps** — user messages, agent responses, tool calls, and observations
 - **Metrics** — token counts, costs, cached tokens per step
@@ -139,6 +139,8 @@ atifact produces [ATIF v1.7](https://github.com/harbor-framework/harbor/blob/mai
 - **Final metrics** — aggregated totals across the trajectory
 - All timestamps preserved as ISO 8601 from source data
 - Null/undefined fields excluded for compact output
+
+ATIF v1.8 supports audio content parts. atifact's current input parsers do not extract audio from source logs.
 
 ## Examples
 

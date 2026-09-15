@@ -65,6 +65,7 @@ function toText(input: string | Uint8Array): string {
 
 export type {
   Agent,
+  AudioSource,
   ContentPart,
   DetectedFormat,
   FinalMetrics,

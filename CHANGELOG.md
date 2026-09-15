@@ -4,6 +4,7 @@
 
 ### Features
 
+- Upgrade emitted trajectories and public TypeScript types to ATIF v1.8; source-log audio extraction is not yet supported
 - Add conversion of standalone Vally `Trajectory` JSON objects to ATIF
 - Add a programmatic API for converting in-memory content or files
 

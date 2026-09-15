@@ -5,7 +5,7 @@ description: This skill should be used when the user asks to "extract agent traj
 
 # Extract Agent Trajectories with atifact
 
-Convert agent session recordings and standalone Vally Trajectory objects into structured ATIF v1.7 trajectory JSON using the `atifact` CLI.
+Convert agent session recordings and standalone Vally Trajectory objects into structured ATIF v1.8 trajectory JSON using the `atifact` CLI.
 
 ## Prerequisites
 

@@ -12,7 +12,7 @@ describe("parseVally", () => {
   it("converts a Vally trajectory to ATIF", async () => {
     const { trajectory, subagentTrajectories } = await parseVally(fixture);
 
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "session-001");
     assert.equal(trajectory.trajectory_id, "trial-001");
     assert.equal(trajectory.agent.name, "copilot-sdk");

@@ -146,7 +146,7 @@ export function parseCodexCliContent(
   const finalMetrics = buildFinalMetrics(turnCompleted, steps);
 
   const trajectory: Trajectory = {
-    schema_version: "ATIF-v1.7",
+    schema_version: "ATIF-v1.8",
     session_id: sessionId,
     agent,
     steps,
@@ -297,7 +297,7 @@ function buildSubagentTrajectories(
         : receiverId;
 
       trajectories.set(receiverId, {
-        schema_version: "ATIF-v1.7",
+        schema_version: "ATIF-v1.8",
         session_id: subSessionId,
         trajectory_id: receiverId,
         agent: {

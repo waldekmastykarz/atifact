@@ -12,7 +12,7 @@ describe("parseCopilotCli", () => {
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
-      assert.equal(t.schema_version, "ATIF-v1.7");
+      assert.equal(t.schema_version, "ATIF-v1.8");
       assert.equal(t.session_id, "session-xyz-789");
     });
 

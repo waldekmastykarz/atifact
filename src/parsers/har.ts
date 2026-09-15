@@ -108,7 +108,7 @@ export function parseHarContent(
 
   return {
     trajectory: {
-      schema_version: "ATIF-v1.7",
+      schema_version: "ATIF-v1.8",
       session_id: generateSessionId(har),
       agent,
       steps: mergedSteps,

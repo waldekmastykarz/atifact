@@ -75,7 +75,7 @@ export function parseVallyContent(
       });
     }
     subagentTrajectories.set(agentId, {
-      schema_version: "ATIF-v1.7",
+      schema_version: "ATIF-v1.8",
       session_id: `${input.metadata.sessionID}:${agentId}`,
       trajectory_id: agentId,
       agent: {
@@ -100,7 +100,7 @@ export function parseVallyContent(
   appendFinalOutput(steps, input.output);
 
   const trajectory: Trajectory = {
-    schema_version: "ATIF-v1.7",
+    schema_version: "ATIF-v1.8",
     session_id: input.metadata.sessionID || input.id,
     trajectory_id: input.id !== input.metadata.sessionID ? input.id : undefined,
     agent,

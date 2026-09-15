@@ -69,7 +69,7 @@ describe("CLI integration", () => {
     ]);
     const trajectory = JSON.parse(stdout);
     assert.equal(typeof trajectory, "object");
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "sess-abc123");
     assert.ok(trajectory.steps.length > 0);
   });
@@ -83,7 +83,7 @@ describe("CLI integration", () => {
     ]);
     const trajectory = JSON.parse(stdout);
     assert.equal(typeof trajectory, "object");
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.ok(trajectory.steps.length > 0);
   });
 
@@ -96,7 +96,7 @@ describe("CLI integration", () => {
     ]);
     const trajectory = JSON.parse(stdout);
     assert.equal(typeof trajectory, "object");
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "session-xyz-789");
     assert.equal(trajectory.agent.name, "copilot-cli");
     assert.ok(trajectory.steps.length > 0);
@@ -111,7 +111,7 @@ describe("CLI integration", () => {
     ]);
     const trajectory = JSON.parse(stdout);
     assert.equal(typeof trajectory, "object");
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "019e97e4-ba5c-7680-85c2-3399e3b68eaf");
     assert.equal(trajectory.agent.name, "codex-cli");
     assert.ok(trajectory.steps.length > 0);
@@ -125,7 +125,7 @@ describe("CLI integration", () => {
       "--quiet",
     ]);
     const trajectory = JSON.parse(stdout);
-    assert.equal(trajectory.schema_version, "ATIF-v1.7");
+    assert.equal(trajectory.schema_version, "ATIF-v1.8");
     assert.equal(trajectory.session_id, "session-001");
     assert.equal(trajectory.agent.name, "copilot-sdk");
     assert.equal(trajectory.subagent_trajectories[0].trajectory_id, "researcher");
@@ -145,7 +145,7 @@ describe("CLI integration", () => {
       await exec("node", [cli, input, "-o", outputPrefix, "--quiet"]);
       const content = await readFile(expectedOutput, "utf-8");
       const trajectory = JSON.parse(content);
-      assert.equal(trajectory.schema_version, "ATIF-v1.7");
+      assert.equal(trajectory.schema_version, "ATIF-v1.8");
     } finally {
       try {
         await unlink(expectedOutput);
@@ -257,7 +257,7 @@ describe("CLI integration", () => {
       // Main trajectory should exist and reference the subagent
       const mainContent = await readFile(mainFile, "utf-8");
       const main = JSON.parse(mainContent);
-      assert.equal(main.schema_version, "ATIF-v1.7");
+      assert.equal(main.schema_version, "ATIF-v1.8");
 
       // Find the subagent ref in the main trajectory
       let foundRef = false;
@@ -278,7 +278,7 @@ describe("CLI integration", () => {
       // Subagent trajectory file should exist
       const subContent = await readFile(subFile, "utf-8");
       const sub = JSON.parse(subContent);
-      assert.equal(sub.schema_version, "ATIF-v1.7");
+      assert.equal(sub.schema_version, "ATIF-v1.8");
       assert.equal(sub.agent.model_name, "gpt-5.4-mini");
       assert.ok(sub.steps.length > 0);
     } finally {

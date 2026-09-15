@@ -280,7 +280,7 @@ export function parseCopilotCliContent(
   const finalMetrics = buildFinalMetrics(resultLine, shutdownLine, steps);
 
   const trajectory: Trajectory = {
-    schema_version: "ATIF-v1.7",
+    schema_version: "ATIF-v1.8",
     session_id: sessionId,
     agent,
     steps,
@@ -553,7 +553,7 @@ function buildSubagentTrajectories(
     const subSessionId = `${parentSessionId}:${taskName || parentId}`;
 
     trajectories.set(parentId, {
-      schema_version: "ATIF-v1.7",
+      schema_version: "ATIF-v1.8",
       session_id: subSessionId,
       trajectory_id: parentId,
       agent: {

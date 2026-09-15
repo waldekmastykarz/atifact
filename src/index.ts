@@ -60,9 +60,9 @@ EXAMPLES
   atifact copilot.jsonl                        Write main + subagent trajectory files
   atifact vally-trajectory.json --json          Convert a Vally trajectory
 
-JSON OUTPUT SCHEMA (ATIF v1.7)
+JSON OUTPUT SCHEMA (ATIF v1.8)
   {
-    "schema_version": "ATIF-v1.7",
+    "schema_version": "ATIF-v1.8",
     "session_id": "string (optional, run-scoped)",
     "trajectory_id": "string (optional, per-document unique)",
     "agent": { "name": "string", "version": "string", "model_name": "string",
