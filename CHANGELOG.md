@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.13.0](https://github.com/waldekmastykarz/atifact/compare/v0.12.1...v0.13.0) - 2026-09-15
+
 ### Features
 
 - Upgrade emitted trajectories and public TypeScript types to ATIF v1.8; source-log audio extraction is not yet supported
