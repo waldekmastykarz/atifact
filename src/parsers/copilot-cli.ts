@@ -70,6 +70,16 @@ interface CopilotUserMessage {
   timestamp: string;
 }
 
+interface CopilotSystemMessage {
+  type: "system.message";
+  data: {
+    content: string;
+    interactionId: string;
+    role: "system";
+  };
+  timestamp: string;
+}
+
 interface CopilotToolRequest {
   toolCallId: string;
   name: string;
@@ -165,6 +175,7 @@ type CopilotLine =
   | CopilotToolsUpdated
   | CopilotMcpServersLoaded
   | CopilotSkillsLoaded
+  | CopilotSystemMessage
   | CopilotUserMessage
   | CopilotAssistantMessage
   | CopilotAssistantMessageDelta
@@ -343,6 +354,16 @@ function buildSteps(
   let stepId = 1;
 
   for (const line of lines) {
+    if (line.type === "system.message") {
+      const system = line as CopilotSystemMessage;
+      steps.push({
+        step_id: stepId++,
+        timestamp: system.timestamp,
+        source: "system",
+        message: system.data.content,
+      });
+    }
+
     if (line.type === "user.message") {
       const user = line as CopilotUserMessage;
       steps.push({

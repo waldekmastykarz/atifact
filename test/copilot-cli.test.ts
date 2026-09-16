@@ -2,13 +2,69 @@ import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseCopilotCli } from "../src/parsers/copilot-cli.js";
+import {
+  parseCopilotCli,
+  parseCopilotCliContent,
+} from "../src/parsers/copilot-cli.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..", "..");
 const fixture = (name: string) => resolve(projectRoot, "test", "fixtures", name);
 
 describe("parseCopilotCli", () => {
+  describe("system messages", () => {
+    it("includes system messages as ATIF system steps", () => {
+      const input = [
+        {
+          type: "session.start",
+          data: { sessionId: "session-with-system-message" },
+          timestamp: "2026-09-15T13:18:20.003Z",
+        },
+        {
+          type: "system.message",
+          data: {
+            content: "You are a coding agent.",
+            interactionId: "interaction-1",
+            role: "system",
+          },
+          timestamp: "2026-09-15T13:18:20.004Z",
+        },
+        {
+          type: "user.message",
+          data: {
+            content: "Create the script.",
+            interactionId: "interaction-1",
+          },
+          timestamp: "2026-09-15T13:18:20.005Z",
+        },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join("\n");
+
+      const { trajectory } = parseCopilotCliContent(input);
+
+      assert.deepEqual(
+        trajectory.steps.map(({ source, message, timestamp }) => ({
+          source,
+          message,
+          timestamp,
+        })),
+        [
+          {
+            source: "system",
+            message: "You are a coding agent.",
+            timestamp: "2026-09-15T13:18:20.004Z",
+          },
+          {
+            source: "user",
+            message: "Create the script.",
+            timestamp: "2026-09-15T13:18:20.005Z",
+          },
+        ]
+      );
+    });
+  });
+
   describe("simple conversation", () => {
     it("produces a valid ATIF trajectory", async () => {
       const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-simple.jsonl"));
