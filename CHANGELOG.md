@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.14.0](https://github.com/waldekmastykarz/atifact/compare/v0.13.0...v0.14.0) - 2026-09-16
+
+### Features
+
+- Preserve Copilot CLI system messages, including system prompts, as ATIF system steps
+
 ## [0.13.0](https://github.com/waldekmastykarz/atifact/compare/v0.12.1...v0.13.0) - 2026-09-15
 
 ### Features
