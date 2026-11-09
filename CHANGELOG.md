@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## [0.15.0](https://github.com/waldekmastykarz/atifact/compare/v0.14.0...v0.15.0) - 2026-11-09
+
+### Features
+
+- Record cache write tokens for each step and in the final metrics of HAR conversions
+- Preserve the grammar of custom (freeform) tools in the tool definitions extracted from HARs, and name `tool_search` tools
+
+### Bug Fixes
+
+- Fix OpenAI Responses API HARs (WebSocket and HTTP) dropping user prompts when multiple user messages are sent together
+- Fix OpenAI Responses API HARs dropping custom tool calls (e.g. `apply_patch`) and their results
+- Emit freeform tool arguments in Copilot CLI conversions as an object (`{ "input": "..." }`) instead of a raw string, so trajectories pass ATIF validation
+
 ## [0.14.0](https://github.com/waldekmastykarz/atifact/compare/v0.13.0...v0.14.0) - 2026-09-16
 
 ### Features
