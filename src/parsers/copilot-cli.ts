@@ -83,9 +83,29 @@ interface CopilotSystemMessage {
 interface CopilotToolRequest {
   toolCallId: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: Record<string, unknown> | string | null;
   type: string;
   intentionSummary?: string;
+}
+
+/**
+ * ATIF requires tool-call arguments to be an object. Freeform (custom) tools
+ * such as apply_patch carry a raw string, so wrap it as `{ input }`.
+ */
+function toToolCall(req: CopilotToolRequest): ToolCall {
+  const raw = req.arguments;
+  const isObject = raw !== null && typeof raw === "object" && !Array.isArray(raw);
+  const call: ToolCall = {
+    tool_call_id: req.toolCallId,
+    function_name: req.name,
+    arguments: isObject
+      ? (raw as Record<string, unknown>)
+      : raw == null
+        ? {}
+        : { input: typeof raw === "string" ? raw : JSON.stringify(raw) },
+  };
+  if (req.type === "custom") call.extra = { tool_type: "custom" };
+  return call;
 }
 
 interface CopilotAssistantMessage {
@@ -388,11 +408,7 @@ function buildSteps(
       const toolCalls: ToolCall[] = [];
       if (msg.data.toolRequests) {
         for (const req of msg.data.toolRequests) {
-          toolCalls.push({
-            tool_call_id: req.toolCallId,
-            function_name: req.name,
-            arguments: req.arguments,
-          });
+          toolCalls.push(toToolCall(req));
         }
       }
 
@@ -484,10 +500,9 @@ function buildSubagentTrajectories(
           (r) => r.toolCallId === parentId
         );
         if (req) {
-          taskName =
-            (req.arguments.name as string) ||
-            (req.arguments.description as string);
-          agentType = req.arguments.agent_type as string;
+          const args = toToolCall(req).arguments;
+          taskName = (args.name as string) || (args.description as string);
+          agentType = args.agent_type as string;
           break;
         }
       }
@@ -527,11 +542,7 @@ function buildSubagentTrajectories(
       const toolCalls: ToolCall[] = [];
       if (msg.data.toolRequests) {
         for (const req of msg.data.toolRequests) {
-          toolCalls.push({
-            tool_call_id: req.toolCallId,
-            function_name: req.name,
-            arguments: req.arguments,
-          });
+          toolCalls.push(toToolCall(req));
         }
       }
 

@@ -361,3 +361,17 @@ describe("parseCopilotCli", () => {
     });
   });
 });
+
+describe("parseCopilotCli — custom (freeform) tools", () => {
+  it("wraps string arguments as { input } and marks the call as custom", async () => {
+    const { trajectory: t } = await parseCopilotCli(fixture("copilot-cli-custom-tool.jsonl"));
+    const step = t.steps.find((s) => s.tool_calls?.length)!;
+    const call = step.tool_calls![0];
+    assert.equal(call.function_name, "apply_patch");
+    assert.deepEqual(call.arguments, {
+      input: '*** Begin Patch\n*** Add File: result.json\n+{"sum": 6}\n*** End Patch\n',
+    });
+    assert.deepEqual(call.extra, { tool_type: "custom" });
+    assert.equal(step.observation!.results[0].source_call_id, "custom_call_patch");
+  });
+});
