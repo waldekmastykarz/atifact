@@ -441,10 +441,35 @@ function extractToolDefinitions(
       };
     }
 
+    // OpenAI Responses freeform tool: { type: "custom", name, description, format }.
+    // Calls carry raw text, represented in tool_calls as { input: "<raw text>" }.
+    if (t.type === "custom") {
+      const def: ToolDefinition = {
+        type: "function",
+        function: {
+          name: t.name as string,
+          description: t.description as string | undefined,
+          parameters: {
+            type: "object",
+            properties: {
+              input: { type: "string", description: "Freeform tool input" },
+            },
+            required: ["input"],
+          },
+        },
+      };
+      if (t.format && typeof t.format === "object") {
+        def.function.format = t.format as Record<string, unknown>;
+      }
+      return def;
+    }
+
+    // Built-in Responses tools without a name (e.g. tool_search) are named
+    // after their type.
     return {
       type: "function",
       function: {
-        name: t.name as string,
+        name: (t.name as string | undefined) ?? (t.type as string),
         description: t.description as string | undefined,
         parameters: t.parameters as Record<string, unknown> | undefined,
       },
@@ -653,10 +678,13 @@ function extractToolResultsFromRequest(
     if (!Array.isArray(input)) return results;
     for (const item of input) {
       const m = item as Record<string, unknown>;
-      if (m.type === "function_call_output") {
+      if (
+        m.type === "function_call_output" ||
+        m.type === "custom_tool_call_output"
+      ) {
         results.push({
           source_call_id: m.call_id as string,
-          content: m.output as string,
+          content: contentText(m.output, ["input_text", "output_text", "text"]),
         });
       }
     }
@@ -747,59 +775,70 @@ function extractLastUserMessage(
   } else if (exchange.apiFormat === "openai-responses") {
     const input = exchange.request.input as unknown[];
     if (!Array.isArray(input)) return null;
-
-    // Find the last user message
-    const userMessages = input.filter((item) => {
-      const m = item as Record<string, unknown>;
-      return m.role === "user";
-    });
-
-    if (userMessages.length === 0) return null;
-    const lastUser = userMessages[userMessages.length - 1] as Record<
-      string,
-      unknown
-    >;
-
-    const content = lastUser.content;
-    let text = "";
-    if (typeof content === "string") {
-      text = content;
-    } else if (Array.isArray(content)) {
-      text = (content as Record<string, unknown>[])
-        .filter((c) => c.type === "input_text" || c.type === "text")
-        .map((c) => c.text as string)
-        .join("\n");
-    }
-
-    if (text) {
-      return {
-        step_id: 0,
-        timestamp: exchange.timestamp,
-        source: "user",
-        message: text,
-      };
-    }
+    return buildUserStep(
+      exchange,
+      lastUserRun(input).map((m) =>
+        contentText(m.content, ["input_text", "text"])
+      )
+    );
   } else {
     // openai-chat
     const messages = exchange.request.messages as unknown[];
     if (!Array.isArray(messages)) return null;
-    const userMessages = messages.filter(
-      (m) => (m as Record<string, unknown>).role === "user"
+    return buildUserStep(
+      exchange,
+      lastUserRun(messages).map((m) => contentText(m.content, ["text"]))
     );
-    if (userMessages.length === 0) return null;
-    const lastUser = userMessages[userMessages.length - 1] as Record<
-      string,
-      unknown
-    >;
-    return {
-      step_id: 0,
-      timestamp: exchange.timestamp,
-      source: "user",
-      message: lastUser.content as string,
-    };
   }
 
   return null;
+}
+
+/**
+ * Returns the most recent run of consecutive user items. A turn can consist
+ * of several user items (e.g. the prompt followed by a reminder), and taking
+ * only the last one would drop the rest. Stateful requests (WebSocket with
+ * previous_response_id) only carry new items; full-history requests replay
+ * earlier turns, which are filtered out by de-duplication in buildSteps.
+ */
+function lastUserRun(items: unknown[]): Record<string, unknown>[] {
+  let end = items.length - 1;
+  while (end >= 0 && (items[end] as Record<string, unknown>)?.role !== "user") {
+    end--;
+  }
+  let start = end;
+  while (
+    start > 0 &&
+    (items[start - 1] as Record<string, unknown>)?.role === "user"
+  ) {
+    start--;
+  }
+  return end < 0
+    ? []
+    : (items.slice(start, end + 1) as Record<string, unknown>[]);
+}
+
+function contentText(content: unknown, partTypes: string[]): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return (content as Record<string, unknown>[])
+    .filter((c) => partTypes.includes(c.type as string))
+    .map((c) => c.text as string)
+    .join("\n");
+}
+
+function buildUserStep(
+  exchange: ParsedExchange,
+  texts: string[]
+): Step | null {
+  const text = texts.filter((t) => t).join("\n");
+  if (!text) return null;
+  return {
+    step_id: 0,
+    timestamp: exchange.timestamp,
+    source: "user",
+    message: text,
+  };
 }
 
 function extractAgentStep(
@@ -927,6 +966,7 @@ function extractAnthropicAgentStep(
       cached_tokens: cachedTokens,
     };
     if (cacheCreationTokens > 0) {
+      metrics.cache_write_tokens = cacheCreationTokens;
       metrics.extra = { cache_creation_input_tokens: cacheCreationTokens };
     }
   }
@@ -973,9 +1013,28 @@ function extractOpenAIResponsesAgentStep(
       callId?: string;
       name?: string;
       arguments: string;
-      summaryParts: string[];
+      input: string;
+      summaryParts: Map<number, string>;
+      done?: Record<string, unknown>;
     }
   > = new Map();
+
+  const getItem = (idx: number, item?: Record<string, unknown>) => {
+    let entry = outputItems.get(idx);
+    if (!entry && item) {
+      entry = {
+        type: item.type as string,
+        text: "",
+        callId: item.call_id as string | undefined,
+        name: item.name as string | undefined,
+        arguments: "",
+        input: "",
+        summaryParts: new Map(),
+      };
+      outputItems.set(idx, entry);
+    }
+    return entry;
+  };
 
   // Extract reasoning effort from request
   const reasoning = exchange.request.reasoning as Record<string, unknown>;
@@ -984,49 +1043,64 @@ function extractOpenAIResponsesAgentStep(
   }
 
   for (const event of events) {
-    const eventType = event._event_type as string | undefined;
+    // SSE events carry the type in the `event:` line, WebSocket frames and
+    // SSE streams without `event:` lines carry it in `type`.
+    const eventType = ((event._event_type ?? event.type) as string | undefined)
+      ?.replace(/^response\./, "");
+    const idx = event.output_index as number;
 
-    if (eventType === "output_item.added" || eventType === "response.output_item.added") {
+    if (eventType === "output_item.added") {
       const item = event.item as Record<string, unknown>;
-      const idx = event.output_index as number;
+      if (item) getItem(idx, item);
+    }
+
+    if (eventType === "output_text.delta") {
+      const item = outputItems.get(idx);
+      if (item) item.text += event.delta as string;
+    }
+
+    if (eventType === "reasoning_summary_text.delta") {
+      const item = outputItems.get(idx);
       if (item) {
-        outputItems.set(idx, {
-          type: item.type as string,
-          text: "",
-          callId: item.call_id as string | undefined,
-          name: item.name as string | undefined,
-          arguments: "",
-          summaryParts: [],
-        });
+        const part = (event.summary_index as number | undefined) ?? 0;
+        item.summaryParts.set(
+          part,
+          (item.summaryParts.get(part) ?? "") + (event.delta as string)
+        );
       }
     }
 
-    if (eventType === "output_text.delta" || eventType === "response.output_text.delta") {
-      const idx = event.output_index as number;
+    if (eventType === "function_call_arguments.delta") {
       const item = outputItems.get(idx);
-      if (item) {
-        item.text += event.delta as string;
-      }
+      if (item) item.arguments += event.delta as string;
     }
 
-    if (eventType === "reasoning_summary_text.delta" || eventType === "response.reasoning_summary_text.delta") {
-      const idx = event.output_index as number;
+    if (eventType === "custom_tool_call_input.delta") {
       const item = outputItems.get(idx);
-      if (item) {
-        item.summaryParts.push(event.delta as string);
-      }
+      if (item) item.input += event.delta as string;
     }
 
-    if (eventType === "function_call_arguments.delta" || eventType === "response.function_call_arguments.delta") {
-      const idx = event.output_index as number;
+    if (eventType === "custom_tool_call_input.done") {
       const item = outputItems.get(idx);
-      if (item) {
-        item.arguments += event.delta as string;
+      if (item && typeof event.input === "string") item.input = event.input;
+    }
+
+    // The completed item is authoritative: it carries the full arguments,
+    // input, text and summary even if deltas are missing.
+    if (eventType === "output_item.done") {
+      const done = event.item as Record<string, unknown>;
+      const item = done ? getItem(idx, done) : undefined;
+      if (item && done) {
+        item.done = done;
+        if (done.call_id) item.callId = done.call_id as string;
+        if (done.name) item.name = done.name as string;
+        if (typeof done.arguments === "string") item.arguments = done.arguments;
+        if (typeof done.input === "string") item.input = done.input;
       }
     }
 
     // Extract completed response with usage
-    if (eventType === "response.completed") {
+    if (eventType === "completed") {
       const response = event.response as Record<string, unknown>;
       if (response) {
         if (response.model) model = response.model as string;
@@ -1040,11 +1114,18 @@ function extractOpenAIResponsesAgentStep(
             string,
             unknown
           >;
+          // input_tokens already includes cached and cache-write tokens
           metrics = {
             prompt_tokens: (usage.input_tokens as number) || 0,
             completion_tokens: (usage.output_tokens as number) || 0,
             cached_tokens: (inputDetails?.cached_tokens as number) || 0,
           };
+          const cacheWriteTokens = inputDetails?.cache_write_tokens as
+            | number
+            | undefined;
+          if (cacheWriteTokens) {
+            metrics.cache_write_tokens = cacheWriteTokens;
+          }
           if (outputDetails?.reasoning_tokens) {
             metrics.extra = {
               reasoning_tokens: outputDetails.reasoning_tokens as number,
@@ -1055,26 +1136,60 @@ function extractOpenAIResponsesAgentStep(
     }
   }
 
-  // Process output items
-  for (const [, item] of outputItems) {
+  const messages: string[] = [];
+  const reasoningParts: string[] = [];
+
+  // Process output items in output order
+  const sortedItems = [...outputItems.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, item]) => item);
+  for (const item of sortedItems) {
     if (item.type === "reasoning") {
-      reasoningContent = item.summaryParts.join("");
+      const summary = item.done?.summary as
+        | Record<string, unknown>[]
+        | undefined;
+      const text = Array.isArray(summary) && summary.length > 0
+        ? summary.map((p) => p.text as string).join("\n\n")
+        : [...item.summaryParts.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([, t]) => t)
+            .join("\n\n");
+      if (text) reasoningParts.push(text);
     } else if (item.type === "message") {
-      message = item.text;
+      const content = item.done?.content;
+      const text = Array.isArray(content) && content.length > 0
+        ? contentText(content, ["output_text", "text"])
+        : item.text;
+      if (text) messages.push(text);
     } else if (item.type === "function_call") {
       let args: Record<string, unknown> = {};
       try {
-        args = JSON.parse(item.arguments || "{}");
+        const parsed = JSON.parse(item.arguments || "{}");
+        args =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed
+            : { input: item.arguments };
       } catch {
-        // leave empty
+        // Keep malformed arguments rather than dropping them
+        args = { input: item.arguments };
       }
       toolCalls.push({
         tool_call_id: item.callId || `call_${toolCalls.length}`,
         function_name: item.name || "unknown",
         arguments: args,
       });
+    } else if (item.type === "custom_tool_call") {
+      // Freeform tool input is raw text; ATIF requires an object
+      toolCalls.push({
+        tool_call_id: item.callId || `call_${toolCalls.length}`,
+        function_name: item.name || "unknown",
+        arguments: { input: item.input },
+        extra: { tool_type: "custom" },
+      });
     }
   }
+  message = messages.join("\n\n");
+  reasoningContent = reasoningParts.join("\n\n");
 
   // Extract tool results from request input (function_call_output items)
   // NOTE: handled separately by extractToolResultsFromRequest, attached to prev step
@@ -1217,6 +1332,7 @@ function computeFinalMetrics(steps: Step[]): FinalMetrics {
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
   let totalCachedTokens = 0;
+  let totalCacheWriteTokens = 0;
   let totalSteps = 0;
 
   for (const step of steps) {
@@ -1227,15 +1343,20 @@ function computeFinalMetrics(steps: Step[]): FinalMetrics {
       totalPromptTokens += step.metrics.prompt_tokens || 0;
       totalCompletionTokens += step.metrics.completion_tokens || 0;
       totalCachedTokens += step.metrics.cached_tokens || 0;
+      totalCacheWriteTokens += step.metrics.cache_write_tokens || 0;
     }
   }
 
-  return {
+  const finalMetrics: FinalMetrics = {
     total_prompt_tokens: totalPromptTokens,
     total_completion_tokens: totalCompletionTokens,
     total_cached_tokens: totalCachedTokens,
     total_steps: steps.length,
   };
+  if (totalCacheWriteTokens > 0) {
+    finalMetrics.total_cache_write_tokens = totalCacheWriteTokens;
+  }
+  return finalMetrics;
 }
 
 function generateSessionId(har: HarFile): string {

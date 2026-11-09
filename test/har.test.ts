@@ -579,3 +579,88 @@ describe("parseHar — multi-model HAR without utility-model flag", () => {
     assert.ok(mainAgentFinal, "agent final response must be present");
   });
 });
+
+for (const [label, file] of [
+  ["WebSocket", "har-websocket-responses-custom-tool.har"],
+  ["HTTP SSE", "har-openai-responses-custom-tool.har"],
+] as const) {
+  describe(`parseHar — Responses API custom tools (${label})`, () => {
+    it("produces the expected step sequence", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      assert.deepEqual(
+        t.steps.map((s) => [s.source, (s.tool_calls ?? []).map((c) => c.function_name), s.observation?.results.length ?? 0]),
+        [
+          ["system", [], 0],
+          ["user", [], 0],
+          ["agent", ["view"], 1],
+          ["agent", ["apply_patch"], 1],
+          ["agent", ["task_complete"], 0],
+        ],
+      );
+    });
+
+    it("keeps all consecutive user items of the prompt", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      const users = t.steps.filter((s) => s.source === "user");
+      assert.equal(users.length, 1);
+      assert.equal(
+        users[0].message,
+        "Sum the values in input.json and write result.json.\n<reminder>\nSome tools are deferred.\n</reminder>",
+      );
+    });
+
+    it("uses output_item.done as authoritative function_call arguments", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      const view = t.steps.find((s) => s.tool_calls?.[0]?.function_name === "view")!;
+      assert.deepEqual(view.tool_calls![0].arguments, { path: "input.json" });
+      assert.equal(view.observation!.results[0].source_call_id, "call_view");
+      assert.equal(view.observation!.results[0].content, '{"values": [1, 2, 3]}');
+    });
+
+    it("extracts custom_tool_call input and its custom_tool_call_output", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      const step = t.steps.find((s) => s.tool_calls?.[0]?.function_name === "apply_patch")!;
+      const call = step.tool_calls![0];
+      assert.equal(call.tool_call_id, "call_patch");
+      assert.deepEqual(call.arguments, {
+        input: '*** Begin Patch\n*** Add File: result.json\n+{"sum": 6}\n*** End Patch\n',
+      });
+      assert.deepEqual(call.extra, { tool_type: "custom" });
+      assert.equal(step.reasoning_content, "Now write the result file.");
+      assert.equal(step.observation!.results[0].source_call_id, "call_patch");
+      assert.equal(step.observation!.results[0].content, "Added 1 file(s): result.json");
+    });
+
+    it("records per-step and final metrics including cache writes", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      const agents = t.steps.filter((s) => s.source === "agent");
+      assert.deepEqual(
+        agents.map((s) => [s.metrics!.prompt_tokens, s.metrics!.completion_tokens, s.metrics!.cached_tokens, s.metrics!.cache_write_tokens]),
+        [
+          [100, 10, 0, 90],
+          [150, 20, 90, 50],
+          [180, 5, 140, 30],
+        ],
+      );
+      assert.equal(t.final_metrics!.total_prompt_tokens, 430);
+      assert.equal(t.final_metrics!.total_completion_tokens, 35);
+      assert.equal(t.final_metrics!.total_cached_tokens, 230);
+      assert.equal(t.final_metrics!.total_cache_write_tokens, 170);
+    });
+
+    it("preserves custom tool grammar and names tool_search", async () => {
+      const { trajectory: t } = await parseHar(fixture(file));
+      const defs = t.agent.tool_definitions!;
+      const patch = defs.find((d) => d.function.name === "apply_patch")!;
+      assert.equal(patch.type, "function");
+      assert.deepEqual(patch.function.parameters?.required, ["input"]);
+      assert.deepEqual(patch.function.format, {
+        type: "grammar",
+        syntax: "lark",
+        definition: "start: begin_patch hunk+ end_patch",
+      });
+      const search = defs.find((d) => d.function.name === "tool_search")!;
+      assert.deepEqual(search.function.parameters?.required, ["query"]);
+    });
+  });
+}

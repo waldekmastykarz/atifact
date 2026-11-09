@@ -27,6 +27,8 @@ export interface ToolDefinition {
     name: string;
     description?: string;
     parameters?: Record<string, unknown>;
+    // Input format of freeform (custom) tools, e.g. a grammar
+    format?: Record<string, unknown>;
   };
 }
 
