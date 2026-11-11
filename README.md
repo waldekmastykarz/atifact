@@ -46,7 +46,7 @@ atifact vally-trajectory.json
 atifact session.har --json | jq '.steps | length'
 ```
 
-Output: `<input>.trajectory.json` in ATIF v1.8 format. Copilot CLI and Codex CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
+Output: `<input>.trajectory.json` in ATIF v1.8 format. Claude Code, Copilot CLI, and Codex CLI logs with subagents produce additional `<input>.trajectory.<name>.json` files.
 
 `--json` mode outputs a single trajectory with subagents embedded in the `subagent_trajectories` array to stdout with no files written.
 
@@ -135,7 +135,7 @@ atifact produces [ATIF v1.8](https://github.com/harbor-framework/harbor/blob/mai
 - **Steps** — user messages, agent responses, tool calls, and observations
 - **Metrics** — token counts, costs, cached tokens per step
 - **Tool calls** — structured function name + arguments with observation results
-- **Subagent trajectories** — Copilot CLI and Codex CLI subagents produce separate trajectory files linked via `subagent_trajectory_ref` with `trajectory_id` resolution; `--json` mode embeds them in `subagent_trajectories`
+- **Subagent trajectories** — Claude Code, Copilot CLI, and Codex CLI subagents produce separate trajectory files linked via `subagent_trajectory_ref` with `trajectory_id` resolution; `--json` mode embeds them in `subagent_trajectories`
 - **Final metrics** — aggregated totals across the trajectory
 - All timestamps preserved as ISO 8601 from source data
 - Null/undefined fields excluded for compact output
