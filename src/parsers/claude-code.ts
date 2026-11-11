@@ -37,6 +37,9 @@ interface ClaudeCodeAssistant {
   parent_tool_use_id: string | null;
   session_id: string;
   uuid: string;
+  agent_id?: string;
+  subagent_type?: string;
+  task_description?: string;
   timestamp?: string;
 }
 
@@ -72,6 +75,9 @@ interface ClaudeCodeUser {
   tool_use_result?: Record<string, unknown>;
   timestamp?: string;
   parent_tool_use_id?: string | null;
+  agent_id?: string;
+  subagent_type?: string;
+  task_description?: string;
 }
 
 interface ClaudeUserContent {
@@ -140,11 +146,21 @@ export function parseClaudeCodeContent(
 
   const agent = buildAgent(initLine);
   const finalUsageByMessageId = collectFinalUsage(lines);
+
+  // Lines with a parent_tool_use_id belong to a subagent (Agent/Task tool)
+  // and must never affect the root trajectory's steps
+  const rootLines = lines.filter((l) => !getParentToolUseId(l));
   const completionUnknown = hasUnknownCompletionUsage(
-    lines,
+    rootLines,
     finalUsageByMessageId
   );
-  const steps = buildSteps(lines, finalUsageByMessageId);
+  const steps = buildSteps(rootLines, finalUsageByMessageId);
+  const subagentTrajectories = buildSubagentTrajectories(
+    lines,
+    initLine,
+    steps,
+    finalUsageByMessageId
+  );
   const finalMetrics = buildFinalMetrics(resultLine, steps, completionUnknown);
 
   return {
@@ -156,7 +172,106 @@ export function parseClaudeCodeContent(
       final_metrics: finalMetrics,
       notes: `Converted from Claude Code CLI logs: ${sourceName}`,
     },
+    subagentTrajectories:
+      subagentTrajectories.size > 0 ? subagentTrajectories : undefined,
   };
+}
+
+function getParentToolUseId(line: ClaudeCodeLine): string | undefined {
+  if (line.type !== "assistant" && line.type !== "user") return undefined;
+  const parentId = (line as ClaudeCodeAssistant | ClaudeCodeUser)
+    .parent_tool_use_id;
+  return typeof parentId === "string" && parentId ? parentId : undefined;
+}
+
+function buildSubagentTrajectories(
+  lines: ClaudeCodeLine[],
+  init: ClaudeCodeInit,
+  rootSteps: Step[],
+  finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
+): Map<string, Trajectory> {
+  const linesByParent = new Map<string, ClaudeCodeLine[]>();
+  for (const line of lines) {
+    const parentId = getParentToolUseId(line);
+    if (!parentId) continue;
+    let group = linesByParent.get(parentId);
+    if (!group) {
+      group = [];
+      linesByParent.set(parentId, group);
+    }
+    group.push(line);
+  }
+
+  const trajectories = new Map<string, Trajectory>();
+
+  for (const [parentId, subLines] of linesByParent) {
+    const parentCall = rootSteps
+      .flatMap((s) => s.tool_calls || [])
+      .find((tc) => tc.tool_call_id === parentId);
+    const meta = subLines.find(
+      (l) =>
+        (l as ClaudeCodeUser).agent_id ||
+        (l as ClaudeCodeUser).subagent_type ||
+        (l as ClaudeCodeUser).task_description
+    ) as ClaudeCodeUser | undefined;
+
+    const taskName =
+      meta?.task_description ||
+      (parentCall?.arguments.description as string | undefined);
+    const agentType =
+      meta?.subagent_type ||
+      (parentCall?.arguments.subagent_type as string | undefined);
+    const model = (
+      subLines.find((l) => l.type === "assistant") as
+        | ClaudeCodeAssistant
+        | undefined
+    )?.message.model;
+
+    const completionUnknown = hasUnknownCompletionUsage(
+      subLines,
+      finalUsageByMessageId
+    );
+    const steps = buildSteps(subLines, finalUsageByMessageId);
+    const subSessionId = `${init.session_id}:${taskName || parentId}`;
+
+    trajectories.set(parentId, {
+      schema_version: "ATIF-v1.8",
+      session_id: subSessionId,
+      trajectory_id: parentId,
+      agent: {
+        name: agentType || "claude-code-subagent",
+        version: init.claude_code_version,
+        model_name: model,
+        ...(meta?.agent_id ? { extra: { agent_id: meta.agent_id } } : {}),
+      },
+      steps,
+      final_metrics: buildFinalMetrics(undefined, steps, completionUnknown),
+      notes: `Subagent trajectory for task "${taskName || parentId}"`,
+    });
+
+    // Link the subagent trajectory from the parent's tool call observation
+    for (const step of rootSteps) {
+      if (!step.tool_calls?.some((tc) => tc.tool_call_id === parentId)) {
+        continue;
+      }
+      if (!step.observation) step.observation = { results: [] };
+      let result = step.observation.results.find(
+        (r) => r.source_call_id === parentId
+      );
+      if (!result) {
+        result = { source_call_id: parentId };
+        step.observation.results.push(result);
+      }
+      result.subagent_trajectory_ref = [
+        {
+          trajectory_id: parentId,
+          session_id: subSessionId,
+        },
+      ];
+    }
+  }
+
+  return trajectories;
 }
 
 function buildAgent(init: ClaudeCodeInit): Agent {
@@ -227,7 +342,7 @@ function collectFinalUsage(
 }
 
 /**
- * Returns true when any main-agent response (grouped by message.id) has no
+ * Returns true when any response (grouped by message.id) has no
  * final output token count, i.e. only placeholder usage was captured.
  */
 function hasUnknownCompletionUsage(
@@ -238,7 +353,7 @@ function hasUnknownCompletionUsage(
   for (const line of lines) {
     if (line.type !== "assistant") continue;
     const assistant = line as ClaudeCodeAssistant;
-    if (assistant.parent_tool_use_id || !assistant.message.usage) continue;
+    if (!assistant.message.usage) continue;
     const id = assistant.message.id;
     const known =
       finalUsageByMessageId.has(id) || assistant.message.stop_reason != null;
@@ -275,9 +390,6 @@ function buildSteps(
 
     if (line.type === "assistant") {
       const assistant = line as ClaudeCodeAssistant;
-
-      // Skip subagent (Task) messages — they're internal
-      if (assistant.parent_tool_use_id) continue;
 
       const messageId = assistant.message.id;
       const merging =
@@ -338,9 +450,6 @@ function buildSteps(
 
     if (line.type === "user") {
       const user = line as ClaudeCodeUser;
-
-      // Skip subagent (Task) messages — they're internal
-      if (user.parent_tool_use_id) continue;
 
       const content = user.message.content;
 

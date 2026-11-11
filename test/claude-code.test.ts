@@ -97,6 +97,47 @@ describe("parseClaudeCode", () => {
     });
   });
 
+  describe("Agent tool subagents", () => {
+    const load = () => parseClaudeCode(fixture("claude-code-agent-tool.jsonl"));
+
+    it("keeps subagent lines out of the root steps", async () => {
+      const { trajectory: t } = await load();
+      assert.deepEqual(
+        t.steps.map((s) => s.source),
+        ["user", "agent", "agent", "agent"]
+      );
+      assert.equal(t.steps.filter((s) => s.source === "user").length, 1);
+      const rootCallIds = t.steps.flatMap((s) => s.tool_calls || []).map((tc) => tc.tool_call_id);
+      assert.deepEqual(rootCallIds, ["toolu_read_root", "toolu_agent"]);
+    });
+
+    it("attaches the Agent tool result and links the subagent trajectory", async () => {
+      const { trajectory: t } = await load();
+      const agentStep = t.steps[2];
+      assert.equal(agentStep.tool_calls![0].function_name, "Agent");
+      const result = agentStep.observation!.results[0];
+      assert.equal(result.source_call_id, "toolu_agent");
+      assert.equal(result.content, "The file contains: hello");
+      assert.deepEqual(result.subagent_trajectory_ref, [
+        { trajectory_id: "toolu_agent", session_id: "sess-agent789:Read a.txt content" },
+      ]);
+    });
+
+    it("emits the subagent's prompt, tool calls, and results as its own trajectory", async () => {
+      const { subagentTrajectories } = await load();
+      assert.equal(subagentTrajectories?.size, 1);
+      const sub = subagentTrajectories!.get("toolu_agent")!;
+      assert.equal(sub.trajectory_id, "toolu_agent");
+      assert.equal(sub.agent.name, "general-purpose");
+      assert.equal(sub.agent.model_name, "claude-haiku-5-5");
+      assert.deepEqual(sub.steps.map((s) => s.source), ["user", "agent", "agent"]);
+      assert.equal(sub.steps[0].message, "Read the file /work/a.txt and return its content.");
+      assert.equal(sub.steps[1].tool_calls![0].tool_call_id, "toolu_read_sub");
+      assert.equal(sub.steps[1].observation!.results[0].content, "1\thello\n2\t");
+      assert.equal(sub.steps[2].message, "The file contains: hello");
+    });
+  });
+
   describe("cache creation tokens", () => {
     it("includes cache_creation_input_tokens in prompt_tokens", async () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-cache-creation.jsonl"));
