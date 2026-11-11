@@ -136,6 +136,57 @@ describe("parseClaudeCode", () => {
     });
   });
 
+  describe("streamed usage", () => {
+    it("uses final output_tokens from message_delta stream events", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-usage.jsonl"));
+      const agentSteps = t.steps.filter((s) => s.source === "agent");
+      assert.deepEqual(
+        agentSteps.map((s) => s.metrics?.completion_tokens),
+        [170, undefined, 88]
+      );
+      assert.equal(agentSteps[2].metrics!.prompt_tokens, 8 + 25523 + 226);
+    });
+
+    it("counts streamed usage once when a response spans several lines", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-usage.jsonl"));
+      const total = t.steps.reduce((sum, s) => sum + (s.metrics?.completion_tokens || 0), 0);
+      assert.equal(total, 170 + 88);
+    });
+
+    it("omits placeholder completion_tokens from message_start usage", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-placeholder-usage.jsonl"));
+      const agentSteps = t.steps.filter((s) => s.source === "agent");
+      assert.equal(agentSteps.length, 3);
+      for (const step of agentSteps) {
+        assert.ok(step.metrics);
+        assert.equal(step.metrics!.completion_tokens, undefined);
+      }
+    });
+
+    it("uses result usage for final metrics when modelUsage is absent", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-placeholder-usage.jsonl"));
+      assert.equal(t.final_metrics!.total_completion_tokens, 258);
+      assert.equal(t.final_metrics!.total_prompt_tokens, 18 + 25523 + 25749);
+      assert.equal(t.final_metrics!.total_cached_tokens, 25523);
+    });
+
+    it("omits total completion tokens when an interrupted capture has unknown step usage", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-interrupted-usage.jsonl"));
+      assert.equal(t.final_metrics!.total_completion_tokens, undefined);
+    });
+
+    it("sums known streamed usage when an interrupted capture repeats message IDs", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-interrupted.jsonl"));
+      assert.equal(t.final_metrics!.total_completion_tokens, 170 + 88);
+    });
+
+    it("keeps main-agent streamed usage when subagent stream events interleave", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-subagent.jsonl"));
+      const agentSteps = t.steps.filter((s) => s.source === "agent");
+      assert.equal(agentSteps[0].metrics!.completion_tokens, 170);
+    });
+  });
+
   describe("error handling", () => {
     it("throws when no init line is found", async () => {
       await assert.rejects(

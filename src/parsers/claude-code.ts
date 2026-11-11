@@ -107,6 +107,7 @@ type ClaudeCodeLine =
   | ClaudeCodeAssistant
   | ClaudeCodeUser
   | ClaudeCodeResult
+  | ClaudeStreamEvent
   | { type: string; [key: string]: unknown };
 
 export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
@@ -136,8 +137,13 @@ export function parseClaudeCodeContent(
   }
 
   const agent = buildAgent(initLine);
-  const steps = buildSteps(lines);
-  const finalMetrics = buildFinalMetrics(resultLine, steps);
+  const finalUsageByMessageId = collectFinalUsage(lines);
+  const completionUnknown = hasUnknownCompletionUsage(
+    lines,
+    finalUsageByMessageId
+  );
+  const steps = buildSteps(lines, finalUsageByMessageId);
+  const finalMetrics = buildFinalMetrics(resultLine, steps, completionUnknown);
 
   return {
     trajectory: {
@@ -164,7 +170,85 @@ function buildAgent(init: ClaudeCodeInit): Agent {
   };
 }
 
-function buildSteps(lines: ClaudeCodeLine[]): Step[] {
+interface ClaudeStreamEvent {
+  type: "stream_event";
+  parent_tool_use_id?: string | null;
+  event: {
+    type: string;
+    message?: { id?: string; usage?: Partial<ClaudeUsage> };
+    usage?: Partial<ClaudeUsage>;
+  };
+}
+
+/**
+ * With `--include-partial-messages`, `stream_event` lines carry the raw API
+ * stream. The `message_delta` event holds the final usage for the response
+ * opened by the preceding `message_start`.
+ */
+function collectFinalUsage(
+  lines: ClaudeCodeLine[]
+): Map<string, Partial<ClaudeUsage>> {
+  const finalUsage = new Map<string, Partial<ClaudeUsage>>();
+  // Subagent streams can interleave with the main one, so track the open
+  // response per stream (keyed by parent_tool_use_id).
+  const openByStream = new Map<
+    string,
+    { id: string; usage: Partial<ClaudeUsage> | undefined }
+  >();
+
+  for (const line of lines) {
+    if (line.type !== "stream_event") continue;
+    const streamLine = line as ClaudeStreamEvent;
+    const event = streamLine.event;
+    if (!event) continue;
+    const streamKey = streamLine.parent_tool_use_id ?? "";
+
+    if (event.type === "message_start") {
+      const id = event.message?.id;
+      if (id) {
+        openByStream.set(streamKey, { id, usage: event.message?.usage });
+      } else {
+        openByStream.delete(streamKey);
+      }
+    } else if (
+      event.type === "message_delta" &&
+      typeof event.usage?.output_tokens === "number"
+    ) {
+      const open = openByStream.get(streamKey);
+      if (open) {
+        finalUsage.set(open.id, { ...open.usage, ...event.usage });
+      }
+    }
+  }
+
+  return finalUsage;
+}
+
+/**
+ * Returns true when any main-agent response (grouped by message.id) has no
+ * final output token count, i.e. only placeholder usage was captured.
+ */
+function hasUnknownCompletionUsage(
+  lines: ClaudeCodeLine[],
+  finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
+): boolean {
+  const knownById = new Map<string, boolean>();
+  for (const line of lines) {
+    if (line.type !== "assistant") continue;
+    const assistant = line as ClaudeCodeAssistant;
+    if (assistant.parent_tool_use_id || !assistant.message.usage) continue;
+    const id = assistant.message.id;
+    const known =
+      finalUsageByMessageId.has(id) || assistant.message.stop_reason != null;
+    knownById.set(id, (knownById.get(id) ?? false) || known);
+  }
+  return [...knownById.values()].some((known) => !known);
+}
+
+function buildSteps(
+  lines: ClaudeCodeLine[],
+  finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
+): Step[] {
   const steps: Step[] = [];
   let stepId = 1;
 
@@ -191,7 +275,11 @@ function buildSteps(lines: ClaudeCodeLine[]): Step[] {
       if (assistant.parent_tool_use_id) continue;
 
       const { text, toolCalls } = extractAssistantContent(assistant);
-      const metrics = extractMetrics(assistant.message.usage);
+      // A response can be split across several assistant lines sharing one
+      // message.id; attribute its final streamed usage to the first only.
+      const finalUsage = finalUsageByMessageId.get(assistant.message.id);
+      finalUsageByMessageId.delete(assistant.message.id);
+      const metrics = extractMetrics(assistant.message, finalUsage);
 
       const step: Step = {
         step_id: stepId,
@@ -321,15 +409,32 @@ function extractObservations(
   return results;
 }
 
-function extractMetrics(usage: ClaudeUsage): Metrics {
+function extractMetrics(
+  message: ClaudeCodeAssistant["message"],
+  finalUsage: Partial<ClaudeUsage> | undefined
+): Metrics | undefined {
+  const usage: Partial<ClaudeUsage> | undefined = finalUsage
+    ? { ...message.usage, ...finalUsage }
+    : message.usage;
+  if (!usage) return undefined;
+
+  // Assistant lines streamed by Claude Code carry the usage snapshot taken at
+  // `message_start` (stop_reason is still null), where output_tokens is only a
+  // placeholder. Only trust it when it's final.
+  const hasFinalOutputTokens =
+    finalUsage !== undefined || message.stop_reason != null;
+
   const cachedTokens = usage.cache_read_input_tokens || 0;
   const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
 
   const metrics: Metrics = {
-    prompt_tokens: usage.input_tokens + cachedTokens + cacheCreationTokens,
-    completion_tokens: usage.output_tokens,
+    prompt_tokens: (usage.input_tokens || 0) + cachedTokens + cacheCreationTokens,
     cached_tokens: cachedTokens,
   };
+
+  if (hasFinalOutputTokens && typeof usage.output_tokens === "number") {
+    metrics.completion_tokens = usage.output_tokens;
+  }
 
   if (cacheCreationTokens > 0) {
     metrics.extra = { cache_creation_input_tokens: cacheCreationTokens };
@@ -340,7 +445,8 @@ function extractMetrics(usage: ClaudeUsage): Metrics {
 
 function buildFinalMetrics(
   result: ClaudeCodeResult | undefined,
-  steps: Step[]
+  steps: Step[],
+  completionUnknown: boolean
 ): FinalMetrics {
   if (result?.modelUsage) {
     let totalPromptTokens = 0;
@@ -365,6 +471,21 @@ function buildFinalMetrics(
     };
   }
 
+  const resultUsage = result?.usage as Partial<ClaudeUsage> | undefined;
+  if (resultUsage && typeof resultUsage.output_tokens === "number") {
+    const cachedTokens = resultUsage.cache_read_input_tokens || 0;
+    return {
+      total_prompt_tokens:
+        (resultUsage.input_tokens || 0) +
+        cachedTokens +
+        (resultUsage.cache_creation_input_tokens || 0),
+      total_completion_tokens: resultUsage.output_tokens,
+      total_cached_tokens: cachedTokens,
+      total_cost_usd: result?.total_cost_usd,
+      total_steps: steps.length,
+    };
+  }
+
   // Fallback: sum from steps
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
@@ -380,7 +501,10 @@ function buildFinalMetrics(
 
   return {
     total_prompt_tokens: totalPromptTokens,
-    total_completion_tokens: totalCompletionTokens,
+    // Omit rather than report a partial total when any step's output is unknown
+    total_completion_tokens: completionUnknown
+      ? undefined
+      : totalCompletionTokens,
     total_cached_tokens: totalCachedTokens,
     total_cost_usd: result?.total_cost_usd,
     total_steps: steps.length,

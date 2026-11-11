@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- Fix Claude Code conversions reporting placeholder `message_start` output tokens as step `completion_tokens`; use final usage from `message_delta` stream events when available (`--include-partial-messages`), otherwise omit it and take final metrics from the `result` line
+
 ## [0.15.0](https://github.com/waldekmastykarz/atifact/compare/v0.14.0...v0.15.0) - 2026-11-09
 
 ### Features
