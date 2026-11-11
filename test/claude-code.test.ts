@@ -179,6 +179,12 @@ describe("parseClaudeCode", () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-interrupted.jsonl"));
       assert.equal(t.final_metrics!.total_completion_tokens, 170 + 88);
     });
+
+    it("keeps main-agent streamed usage when subagent stream events interleave", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-subagent.jsonl"));
+      const agentSteps = t.steps.filter((s) => s.source === "agent");
+      assert.equal(agentSteps[0].metrics!.completion_tokens, 170);
+    });
   });
 
   describe("error handling", () => {

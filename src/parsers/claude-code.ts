@@ -170,6 +170,7 @@ function buildAgent(init: ClaudeCodeInit): Agent {
 
 interface ClaudeStreamEvent {
   type: "stream_event";
+  parent_tool_use_id?: string | null;
   event: {
     type: string;
     message?: { id?: string; usage?: Partial<ClaudeUsage> };
@@ -186,23 +187,35 @@ function collectFinalUsage(
   lines: ClaudeCodeLine[]
 ): Map<string, Partial<ClaudeUsage>> {
   const finalUsage = new Map<string, Partial<ClaudeUsage>>();
-  let currentMessageId: string | undefined;
-  let currentStartUsage: Partial<ClaudeUsage> | undefined;
+  // Subagent streams can interleave with the main one, so track the open
+  // response per stream (keyed by parent_tool_use_id).
+  const openByStream = new Map<
+    string,
+    { id: string; usage: Partial<ClaudeUsage> | undefined }
+  >();
 
   for (const line of lines) {
     if (line.type !== "stream_event") continue;
-    const event = (line as ClaudeStreamEvent).event;
+    const streamLine = line as ClaudeStreamEvent;
+    const event = streamLine.event;
     if (!event) continue;
+    const streamKey = streamLine.parent_tool_use_id ?? "";
 
     if (event.type === "message_start") {
-      currentMessageId = event.message?.id;
-      currentStartUsage = event.message?.usage;
+      const id = event.message?.id;
+      if (id) {
+        openByStream.set(streamKey, { id, usage: event.message?.usage });
+      } else {
+        openByStream.delete(streamKey);
+      }
     } else if (
       event.type === "message_delta" &&
-      currentMessageId &&
       typeof event.usage?.output_tokens === "number"
     ) {
-      finalUsage.set(currentMessageId, { ...currentStartUsage, ...event.usage });
+      const open = openByStream.get(streamKey);
+      if (open) {
+        finalUsage.set(open.id, { ...open.usage, ...event.usage });
+      }
     }
   }
 
