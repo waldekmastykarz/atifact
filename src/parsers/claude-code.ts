@@ -235,10 +235,11 @@ function buildSteps(
       if (assistant.parent_tool_use_id) continue;
 
       const { text, toolCalls } = extractAssistantContent(assistant);
-      const metrics = extractMetrics(
-        assistant.message,
-        finalUsageByMessageId.get(assistant.message.id)
-      );
+      // A response can be split across several assistant lines sharing one
+      // message.id; attribute its final streamed usage to the first only.
+      const finalUsage = finalUsageByMessageId.get(assistant.message.id);
+      finalUsageByMessageId.delete(assistant.message.id);
+      const metrics = extractMetrics(assistant.message, finalUsage);
 
       const step: Step = {
         step_id: stepId,

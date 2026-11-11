@@ -142,15 +142,21 @@ describe("parseClaudeCode", () => {
       const agentSteps = t.steps.filter((s) => s.source === "agent");
       assert.deepEqual(
         agentSteps.map((s) => s.metrics?.completion_tokens),
-        [170, 88]
+        [170, undefined, 88]
       );
-      assert.equal(agentSteps[1].metrics!.prompt_tokens, 8 + 25523 + 226);
+      assert.equal(agentSteps[2].metrics!.prompt_tokens, 8 + 25523 + 226);
+    });
+
+    it("counts streamed usage once when a response spans several lines", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-usage.jsonl"));
+      const total = t.steps.reduce((sum, s) => sum + (s.metrics?.completion_tokens || 0), 0);
+      assert.equal(total, 170 + 88);
     });
 
     it("omits placeholder completion_tokens from message_start usage", async () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-placeholder-usage.jsonl"));
       const agentSteps = t.steps.filter((s) => s.source === "agent");
-      assert.equal(agentSteps.length, 2);
+      assert.equal(agentSteps.length, 3);
       for (const step of agentSteps) {
         assert.ok(step.metrics);
         assert.equal(step.metrics!.completion_tokens, undefined);
