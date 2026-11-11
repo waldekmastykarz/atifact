@@ -71,6 +71,7 @@ interface ClaudeCodeUser {
   };
   tool_use_result?: Record<string, unknown>;
   timestamp?: string;
+  parent_tool_use_id?: string | null;
 }
 
 interface ClaudeUserContent {
@@ -251,12 +252,20 @@ function buildSteps(
   finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
 ): Step[] {
   const steps: Step[] = [];
-  let stepId = 1;
 
-  // Track pending tool calls from assistant messages so we can pair them
-  // with subsequent user tool_result messages
-  let pendingToolCalls: ToolCall[] = [];
-  let pendingAssistantStep: Step | null = null;
+  // Claude Code emits one assistant line per content block of a single API
+  // response; all of them share message.id and repeat the same usage. Keep the
+  // current agent step open so these lines can be merged into one step.
+  let currentStep: Step | null = null;
+  let currentMessageId: string | undefined;
+  let currentFinalUsage: Partial<ClaudeUsage> | undefined;
+
+  const flush = () => {
+    if (currentStep) steps.push(currentStep);
+    currentStep = null;
+    currentMessageId = undefined;
+    currentFinalUsage = undefined;
+  };
   // Results can arrive after the owning step was flushed (e.g. separate user
   // messages, or subagent activity before the root result)
   const toolCallsById = new Map<string, ToolCall>();
@@ -265,28 +274,53 @@ function buildSteps(
     if (line.type === "system" || line.type === "result") continue;
 
     if (line.type === "assistant") {
-      // If there's a pending assistant step without observations, flush it
-      if (pendingAssistantStep) {
-        steps.push(pendingAssistantStep);
-        stepId++;
-        pendingAssistantStep = null;
-        pendingToolCalls = [];
-      }
-
       const assistant = line as ClaudeCodeAssistant;
 
       // Skip subagent (Task) messages — they're internal
       if (assistant.parent_tool_use_id) continue;
 
-      const { text, reasoning, toolCalls } = extractAssistantContent(assistant);
-      // A response can be split across several assistant lines sharing one
-      // message.id; attribute its final streamed usage to the first only.
-      const finalUsage = finalUsageByMessageId.get(assistant.message.id);
-      finalUsageByMessageId.delete(assistant.message.id);
+      const messageId = assistant.message.id;
+      const merging =
+        currentStep !== null && !!messageId && messageId === currentMessageId;
+      const { text, reasoning, toolCalls } = extractAssistantContent(
+        assistant,
+        merging ? (currentStep as Step | null)?.tool_calls?.length ?? 0 : 0
+      );
+      for (const tc of toolCalls) toolCallsById.set(tc.tool_call_id, tc);
+
+      if (merging && currentStep) {
+        const step: Step = currentStep;
+        step.message = `${step.message}${text}`;
+        if (reasoning) {
+          step.reasoning_content = `${step.reasoning_content ?? ""}${reasoning}`;
+        }
+        if (toolCalls.length > 0) {
+          step.tool_calls = [...(step.tool_calls ?? []), ...toolCalls];
+        }
+        // Usage is repeated on every line of the response; count it once,
+        // preferring a snapshot that carries final output tokens.
+        const metrics = extractMetrics(assistant.message, currentFinalUsage);
+        if (
+          metrics &&
+          (metrics.completion_tokens !== undefined ||
+            step.metrics?.completion_tokens === undefined)
+        ) {
+          step.metrics = metrics;
+        }
+        continue;
+      }
+
+      flush();
+
+      // Final streamed usage (if any) belongs to the response, not each line.
+      const finalUsage = messageId
+        ? finalUsageByMessageId.get(messageId)
+        : undefined;
+      if (messageId) finalUsageByMessageId.delete(messageId);
       const metrics = extractMetrics(assistant.message, finalUsage);
 
       const step: Step = {
-        step_id: stepId,
+        step_id: 0,
         ...(assistant.timestamp ? { timestamp: assistant.timestamp } : {}),
         source: "agent",
         model_name: assistant.message.model,
@@ -295,45 +329,39 @@ function buildSteps(
 
       if (reasoning) step.reasoning_content = reasoning;
       if (toolCalls.length > 0) step.tool_calls = toolCalls;
-      for (const tc of toolCalls) toolCallsById.set(tc.tool_call_id, tc);
       if (metrics) step.metrics = metrics;
 
-      if (toolCalls.length > 0) {
-        // Hold this step — wait for tool results
-        pendingAssistantStep = step;
-        pendingToolCalls = toolCalls;
-      } else {
-        steps.push(step);
-        stepId++;
-      }
+      currentStep = step;
+      currentMessageId = messageId;
+      currentFinalUsage = finalUsage;
     }
 
     if (line.type === "user") {
       const user = line as ClaudeCodeUser;
+
+      // Skip subagent (Task) messages — they're internal
+      if (user.parent_tool_use_id) continue;
+
       const content = user.message.content;
 
       // Check if this is a tool result
       const hasToolResult = content.some((c) => c.type === "tool_result");
       if (hasToolResult) recordToolCallResults(toolCallsById, content);
 
-      if (hasToolResult && pendingAssistantStep) {
-        // Attach observations to the pending assistant step
-        const observations = extractObservations(content);
-        if (observations.length > 0) {
-          pendingAssistantStep.observation = { results: observations };
+      if (hasToolResult) {
+        // Attach observations to the current agent step. Results for parallel
+        // tool calls may arrive on separate lines, so keep the step open.
+        const step = currentStep as Step | null;
+        if (step?.tool_calls) {
+          const observations = extractObservations(content);
+          if (observations.length > 0) {
+            step.observation = {
+              results: [...(step.observation?.results ?? []), ...observations],
+            };
+          }
         }
-        steps.push(pendingAssistantStep);
-        stepId++;
-        pendingAssistantStep = null;
-        pendingToolCalls = [];
-      } else if (!hasToolResult) {
-        // Flush any pending assistant step
-        if (pendingAssistantStep) {
-          steps.push(pendingAssistantStep);
-          stepId++;
-          pendingAssistantStep = null;
-          pendingToolCalls = [];
-        }
+      } else {
+        flush();
 
         // Regular user message
         const text = content
@@ -343,23 +371,19 @@ function buildSteps(
 
         if (text) {
           steps.push({
-            step_id: stepId,
+            step_id: 0,
             ...(user.timestamp ? { timestamp: user.timestamp } : {}),
             source: "user",
             message: text,
           });
-          stepId++;
         }
       }
     }
   }
 
-  // Flush any remaining pending step
-  if (pendingAssistantStep) {
-    steps.push(pendingAssistantStep);
-  }
+  flush();
 
-  // Re-number step_ids sequentially
+  // Number step_ids sequentially
   for (let i = 0; i < steps.length; i++) {
     steps[i].step_id = i + 1;
   }
@@ -367,7 +391,10 @@ function buildSteps(
   return steps;
 }
 
-function extractAssistantContent(assistant: ClaudeCodeAssistant): {
+function extractAssistantContent(
+  assistant: ClaudeCodeAssistant,
+  toolCallOffset = 0
+): {
   text: string;
   reasoning: string;
   toolCalls: ToolCall[];
@@ -383,7 +410,7 @@ function extractAssistantContent(assistant: ClaudeCodeAssistant): {
       reasoning += block.thinking;
     } else if (block.type === "tool_use") {
       toolCalls.push({
-        tool_call_id: block.id || `call_${toolCalls.length}`,
+        tool_call_id: block.id || `call_${toolCallOffset + toolCalls.length}`,
         function_name: block.name || "unknown",
         arguments: block.input || {},
       });

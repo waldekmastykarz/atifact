@@ -142,9 +142,9 @@ describe("parseClaudeCode", () => {
       const agentSteps = t.steps.filter((s) => s.source === "agent");
       assert.deepEqual(
         agentSteps.map((s) => s.metrics?.completion_tokens),
-        [170, undefined, 88]
+        [170, 88]
       );
-      assert.equal(agentSteps[2].metrics!.prompt_tokens, 8 + 25523 + 226);
+      assert.equal(agentSteps[1].metrics!.prompt_tokens, 8 + 25523 + 226);
     });
 
     it("counts streamed usage once when a response spans several lines", async () => {
@@ -156,7 +156,7 @@ describe("parseClaudeCode", () => {
     it("omits placeholder completion_tokens from message_start usage", async () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-placeholder-usage.jsonl"));
       const agentSteps = t.steps.filter((s) => s.source === "agent");
-      assert.equal(agentSteps.length, 3);
+      assert.equal(agentSteps.length, 2);
       for (const step of agentSteps) {
         assert.ok(step.metrics);
         assert.equal(step.metrics!.completion_tokens, undefined);
@@ -192,6 +192,87 @@ describe("parseClaudeCode", () => {
       await assert.rejects(
         () => parseClaudeCode(fixture("claude-code-no-init.jsonl")),
         { message: /No system\/init line found/ }
+      );
+    });
+  });
+
+  describe("one API response split across lines", () => {
+    it("merges lines sharing message.id into one agent step", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-split-message.jsonl"));
+      assert.deepEqual(t.steps.map((s) => s.step_id), [1, 2]);
+      assert.deepEqual(t.steps.map((s) => s.source), ["agent", "agent"]);
+      assert.deepEqual(
+        t.steps[0].tool_calls!.map((c) => c.tool_call_id),
+        ["toolu_01PE7iTRUEYvRBBX7GYPgZdn", "toolu_02"]
+      );
+      assert.equal(t.steps[1].message, "Hello.");
+    });
+
+    it("attaches tool results from separate lines to the merged step", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-split-message.jsonl"));
+      assert.deepEqual(
+        t.steps[0].observation!.results.map((r) => r.source_call_id),
+        ["toolu_01PE7iTRUEYvRBBX7GYPgZdn", "toolu_02"]
+      );
+    });
+
+    it("counts each response's usage once", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-split-message.jsonl"));
+      assert.equal(t.steps[0].metrics!.prompt_tokens, 25533);
+      assert.equal(t.steps[1].metrics!.prompt_tokens, 25757);
+      assert.equal(t.final_metrics!.total_prompt_tokens, 51290);
+      assert.equal(t.final_metrics!.total_steps, 2);
+    });
+
+    it("ignores subagent user lines between blocks of the same response", () => {
+      const usage = { input_tokens: 10, output_tokens: 3 };
+      const assistant = (content: unknown[]) =>
+        JSON.stringify({
+          type: "assistant",
+          message: { model: "m", id: "msg_1", role: "assistant", content, usage },
+          parent_tool_use_id: null,
+        });
+      const jsonl = [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s", model: "m", tools: [], claude_code_version: "1" }),
+        assistant([{ type: "tool_use", id: "toolu_task", name: "Task", input: {} }]),
+        JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "Subagent prompt" }] }, parent_tool_use_id: "toolu_task" }),
+        JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_nested", content: "nested" }] }, parent_tool_use_id: "toolu_task" }),
+        assistant([{ type: "text", text: "Done." }]),
+        JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_task", content: "ok" }] }, parent_tool_use_id: null }),
+      ].join("\n");
+
+      const { trajectory: t } = parseClaudeCodeContent(jsonl);
+      assert.equal(t.steps.length, 1);
+      assert.equal(t.steps[0].message, "Done.");
+      assert.deepEqual(
+        t.steps[0].observation!.results.map((r) => r.source_call_id),
+        ["toolu_task"]
+      );
+    });
+
+    it("keeps fallback tool call ids unique across merged lines", () => {
+      const assistant = (name: string) =>
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            model: "m",
+            id: "msg_1",
+            role: "assistant",
+            content: [{ type: "tool_use", name, input: {} }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+          },
+          parent_tool_use_id: null,
+        });
+      const jsonl = [
+        JSON.stringify({ type: "system", subtype: "init", session_id: "s", model: "m", tools: [], claude_code_version: "1" }),
+        assistant("Read"),
+        assistant("Bash"),
+      ].join("\n");
+
+      const { trajectory: t } = parseClaudeCodeContent(jsonl);
+      assert.deepEqual(
+        t.steps[0].tool_calls!.map((c) => c.tool_call_id),
+        ["call_0", "call_1"]
       );
     });
   });
