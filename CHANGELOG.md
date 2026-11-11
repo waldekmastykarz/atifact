@@ -1,9 +1,16 @@
 # Changelog
 
-## Unreleased
+## [0.16.0](https://github.com/waldekmastykarz/atifact/compare/v0.15.0...v0.16.0) - 2026-11-11
+
+### Features
+
+- Set step timestamps in Claude Code conversions from the source transcript
+- Map Claude Code thinking blocks to step `reasoning_content`
+- Record whether each Claude Code tool call succeeded or failed, based on the `tool_result` `is_error` flag
 
 ### Bug Fixes
 
+- Fix Claude Code conversions splitting one API response into several steps and double-counting its usage; lines sharing a `message.id` are now merged into a single step
 - Fix Claude Code conversions reporting placeholder `message_start` output tokens as step `completion_tokens`; use final usage from `message_delta` stream events when available (`--include-partial-messages`), otherwise omit it and take final metrics from the `result` line
 - Fix Claude Code conversions leaking subagent (`Agent`/`Task` tool) prompts and tool results into the root trajectory and dropping the `Agent` tool result; subagents are now emitted as separate trajectories linked via `subagent_trajectory_ref`
 
