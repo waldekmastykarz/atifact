@@ -257,6 +257,9 @@ function buildSteps(
   // with subsequent user tool_result messages
   let pendingToolCalls: ToolCall[] = [];
   let pendingAssistantStep: Step | null = null;
+  // Results can arrive after the owning step was flushed (e.g. separate user
+  // messages, or subagent activity before the root result)
+  const toolCallsById = new Map<string, ToolCall>();
 
   for (const line of lines) {
     if (line.type === "system" || line.type === "result") continue;
@@ -292,6 +295,7 @@ function buildSteps(
 
       if (reasoning) step.reasoning_content = reasoning;
       if (toolCalls.length > 0) step.tool_calls = toolCalls;
+      for (const tc of toolCalls) toolCallsById.set(tc.tool_call_id, tc);
       if (metrics) step.metrics = metrics;
 
       if (toolCalls.length > 0) {
@@ -310,6 +314,7 @@ function buildSteps(
 
       // Check if this is a tool result
       const hasToolResult = content.some((c) => c.type === "tool_result");
+      if (hasToolResult) recordToolCallResults(toolCallsById, content);
 
       if (hasToolResult && pendingAssistantStep) {
         // Attach observations to the pending assistant step
@@ -413,6 +418,27 @@ function extractObservations(
   }
 
   return results;
+}
+
+// Records each tool call's outcome using the Vally ATIF tool evidence
+// convention: extra["microsoft.vally"].tool_call_result.
+function recordToolCallResults(
+  toolCallsById: Map<string, ToolCall>,
+  content: ClaudeUserContent[]
+): void {
+  for (const c of content) {
+    if (c.type !== "tool_result" || !c.tool_use_id) continue;
+    const call = toolCallsById.get(c.tool_use_id);
+    if (!call) continue;
+    const existing = call.extra?.["microsoft.vally"];
+    call.extra = {
+      ...call.extra,
+      "microsoft.vally": {
+        ...(existing && typeof existing === "object" ? existing : {}),
+        tool_call_result: c.is_error === true ? "failure" : "success",
+      },
+    };
+  }
 }
 
 function extractMetrics(

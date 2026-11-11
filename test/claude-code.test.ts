@@ -257,4 +257,35 @@ describe("parseClaudeCode", () => {
       assert.ok(t.steps.every((s) => s.reasoning_content === undefined));
     });
   });
+
+  describe("tool call results", () => {
+    it("marks tool calls with is_error results as failures", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-tool-error.jsonl"));
+      const call = t.steps[1].tool_calls!.find((c) => c.tool_call_id === "toolu_missing")!;
+      assert.deepEqual(call.extra, { "microsoft.vally": { tool_call_result: "failure" } });
+      assert.equal(
+        t.steps[1].observation!.results.find((r) => r.source_call_id === "toolu_missing")!.content,
+        "File does not exist. Note: your current working directory is /work"
+      );
+    });
+
+    it("marks tool calls without is_error as successes", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-tool-error.jsonl"));
+      const call = t.steps[1].tool_calls!.find((c) => c.tool_call_id === "toolu_ok")!;
+      assert.deepEqual(call.extra, { "microsoft.vally": { tool_call_result: "success" } });
+    });
+
+    it("records outcomes for results arriving after the step was flushed", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-tool-error-split.jsonl"));
+      const calls = new Map(t.steps.flatMap((s) => s.tool_calls ?? []).map((c) => [c.tool_call_id, c]));
+      const status = (id: string) =>
+        (calls.get(id)!.extra?.["microsoft.vally"] as Record<string, unknown>).tool_call_result;
+      // Second result in a separate user message
+      assert.equal(status("toolu_a"), "success");
+      assert.equal(status("toolu_b"), "failure");
+      // Subagent activity precedes the root result
+      assert.equal(status("toolu_agent"), "failure");
+      assert.ok(!calls.has("toolu_sub"));
+    });
+  });
 });
