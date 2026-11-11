@@ -41,8 +41,9 @@ interface ClaudeCodeAssistant {
 }
 
 interface ClaudeContentBlock {
-  type: "text" | "tool_use";
+  type: "text" | "tool_use" | "thinking" | "redacted_thinking";
   text?: string;
+  thinking?: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -274,7 +275,7 @@ function buildSteps(
       // Skip subagent (Task) messages — they're internal
       if (assistant.parent_tool_use_id) continue;
 
-      const { text, toolCalls } = extractAssistantContent(assistant);
+      const { text, reasoning, toolCalls } = extractAssistantContent(assistant);
       // A response can be split across several assistant lines sharing one
       // message.id; attribute its final streamed usage to the first only.
       const finalUsage = finalUsageByMessageId.get(assistant.message.id);
@@ -289,6 +290,7 @@ function buildSteps(
         message: text,
       };
 
+      if (reasoning) step.reasoning_content = reasoning;
       if (toolCalls.length > 0) step.tool_calls = toolCalls;
       if (metrics) step.metrics = metrics;
 
@@ -362,14 +364,18 @@ function buildSteps(
 
 function extractAssistantContent(assistant: ClaudeCodeAssistant): {
   text: string;
+  reasoning: string;
   toolCalls: ToolCall[];
 } {
   let text = "";
+  let reasoning = "";
   const toolCalls: ToolCall[] = [];
 
   for (const block of assistant.message.content) {
     if (block.type === "text" && block.text) {
       text += block.text;
+    } else if (block.type === "thinking" && block.thinking) {
+      reasoning += block.thinking;
     } else if (block.type === "tool_use") {
       toolCalls.push({
         tool_call_id: block.id || `call_${toolCalls.length}`,
@@ -379,7 +385,7 @@ function extractAssistantContent(assistant: ClaudeCodeAssistant): {
     }
   }
 
-  return { text, toolCalls };
+  return { text, reasoning, toolCalls };
 }
 
 function extractObservations(
