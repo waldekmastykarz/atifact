@@ -105,6 +105,7 @@ type ClaudeCodeLine =
   | ClaudeCodeAssistant
   | ClaudeCodeUser
   | ClaudeCodeResult
+  | ClaudeStreamEvent
   | { type: string; [key: string]: unknown };
 
 export async function parseClaudeCode(filePath: string): Promise<ParseResult> {
@@ -134,7 +135,8 @@ export function parseClaudeCodeContent(
   }
 
   const agent = buildAgent(initLine);
-  const steps = buildSteps(lines);
+  const finalUsageByMessageId = collectFinalUsage(lines);
+  const steps = buildSteps(lines, finalUsageByMessageId);
   const finalMetrics = buildFinalMetrics(resultLine, steps);
 
   return {
@@ -162,7 +164,51 @@ function buildAgent(init: ClaudeCodeInit): Agent {
   };
 }
 
-function buildSteps(lines: ClaudeCodeLine[]): Step[] {
+interface ClaudeStreamEvent {
+  type: "stream_event";
+  event: {
+    type: string;
+    message?: { id?: string; usage?: Partial<ClaudeUsage> };
+    usage?: Partial<ClaudeUsage>;
+  };
+}
+
+/**
+ * With `--include-partial-messages`, `stream_event` lines carry the raw API
+ * stream. The `message_delta` event holds the final usage for the response
+ * opened by the preceding `message_start`.
+ */
+function collectFinalUsage(
+  lines: ClaudeCodeLine[]
+): Map<string, Partial<ClaudeUsage>> {
+  const finalUsage = new Map<string, Partial<ClaudeUsage>>();
+  let currentMessageId: string | undefined;
+  let currentStartUsage: Partial<ClaudeUsage> | undefined;
+
+  for (const line of lines) {
+    if (line.type !== "stream_event") continue;
+    const event = (line as ClaudeStreamEvent).event;
+    if (!event) continue;
+
+    if (event.type === "message_start") {
+      currentMessageId = event.message?.id;
+      currentStartUsage = event.message?.usage;
+    } else if (
+      event.type === "message_delta" &&
+      currentMessageId &&
+      typeof event.usage?.output_tokens === "number"
+    ) {
+      finalUsage.set(currentMessageId, { ...currentStartUsage, ...event.usage });
+    }
+  }
+
+  return finalUsage;
+}
+
+function buildSteps(
+  lines: ClaudeCodeLine[],
+  finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
+): Step[] {
   const steps: Step[] = [];
   let stepId = 1;
 
@@ -189,7 +235,10 @@ function buildSteps(lines: ClaudeCodeLine[]): Step[] {
       if (assistant.parent_tool_use_id) continue;
 
       const { text, toolCalls } = extractAssistantContent(assistant);
-      const metrics = extractMetrics(assistant.message.usage);
+      const metrics = extractMetrics(
+        assistant.message,
+        finalUsageByMessageId.get(assistant.message.id)
+      );
 
       const step: Step = {
         step_id: stepId,
@@ -317,15 +366,32 @@ function extractObservations(
   return results;
 }
 
-function extractMetrics(usage: ClaudeUsage): Metrics {
+function extractMetrics(
+  message: ClaudeCodeAssistant["message"],
+  finalUsage: Partial<ClaudeUsage> | undefined
+): Metrics | undefined {
+  const usage: Partial<ClaudeUsage> | undefined = finalUsage
+    ? { ...message.usage, ...finalUsage }
+    : message.usage;
+  if (!usage) return undefined;
+
+  // Assistant lines streamed by Claude Code carry the usage snapshot taken at
+  // `message_start` (stop_reason is still null), where output_tokens is only a
+  // placeholder. Only trust it when it's final.
+  const hasFinalOutputTokens =
+    finalUsage !== undefined || message.stop_reason != null;
+
   const cachedTokens = usage.cache_read_input_tokens || 0;
   const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
 
   const metrics: Metrics = {
-    prompt_tokens: usage.input_tokens + cachedTokens + cacheCreationTokens,
-    completion_tokens: usage.output_tokens,
+    prompt_tokens: (usage.input_tokens || 0) + cachedTokens + cacheCreationTokens,
     cached_tokens: cachedTokens,
   };
+
+  if (hasFinalOutputTokens && typeof usage.output_tokens === "number") {
+    metrics.completion_tokens = usage.output_tokens;
+  }
 
   if (cacheCreationTokens > 0) {
     metrics.extra = { cache_creation_input_tokens: cacheCreationTokens };
@@ -357,6 +423,21 @@ function buildFinalMetrics(
       total_completion_tokens: totalCompletionTokens,
       total_cached_tokens: totalCachedTokens,
       total_cost_usd: result.total_cost_usd,
+      total_steps: steps.length,
+    };
+  }
+
+  const resultUsage = result?.usage as Partial<ClaudeUsage> | undefined;
+  if (resultUsage && typeof resultUsage.output_tokens === "number") {
+    const cachedTokens = resultUsage.cache_read_input_tokens || 0;
+    return {
+      total_prompt_tokens:
+        (resultUsage.input_tokens || 0) +
+        cachedTokens +
+        (resultUsage.cache_creation_input_tokens || 0),
+      total_completion_tokens: resultUsage.output_tokens,
+      total_cached_tokens: cachedTokens,
+      total_cost_usd: result?.total_cost_usd,
       total_steps: steps.length,
     };
   }
