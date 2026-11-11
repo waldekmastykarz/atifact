@@ -174,6 +174,11 @@ describe("parseClaudeCode", () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-interrupted-usage.jsonl"));
       assert.equal(t.final_metrics!.total_completion_tokens, undefined);
     });
+
+    it("sums known streamed usage when an interrupted capture repeats message IDs", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-streamed-interrupted.jsonl"));
+      assert.equal(t.final_metrics!.total_completion_tokens, 170 + 88);
+    });
   });
 
   describe("error handling", () => {

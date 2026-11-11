@@ -136,8 +136,12 @@ export function parseClaudeCodeContent(
 
   const agent = buildAgent(initLine);
   const finalUsageByMessageId = collectFinalUsage(lines);
+  const completionUnknown = hasUnknownCompletionUsage(
+    lines,
+    finalUsageByMessageId
+  );
   const steps = buildSteps(lines, finalUsageByMessageId);
-  const finalMetrics = buildFinalMetrics(resultLine, steps);
+  const finalMetrics = buildFinalMetrics(resultLine, steps, completionUnknown);
 
   return {
     trajectory: {
@@ -203,6 +207,27 @@ function collectFinalUsage(
   }
 
   return finalUsage;
+}
+
+/**
+ * Returns true when any main-agent response (grouped by message.id) has no
+ * final output token count, i.e. only placeholder usage was captured.
+ */
+function hasUnknownCompletionUsage(
+  lines: ClaudeCodeLine[],
+  finalUsageByMessageId: Map<string, Partial<ClaudeUsage>>
+): boolean {
+  const knownById = new Map<string, boolean>();
+  for (const line of lines) {
+    if (line.type !== "assistant") continue;
+    const assistant = line as ClaudeCodeAssistant;
+    if (assistant.parent_tool_use_id || !assistant.message.usage) continue;
+    const id = assistant.message.id;
+    const known =
+      finalUsageByMessageId.has(id) || assistant.message.stop_reason != null;
+    knownById.set(id, (knownById.get(id) ?? false) || known);
+  }
+  return [...knownById.values()].some((known) => !known);
 }
 
 function buildSteps(
@@ -403,7 +428,8 @@ function extractMetrics(
 
 function buildFinalMetrics(
   result: ClaudeCodeResult | undefined,
-  steps: Step[]
+  steps: Step[],
+  completionUnknown: boolean
 ): FinalMetrics {
   if (result?.modelUsage) {
     let totalPromptTokens = 0;
@@ -447,14 +473,10 @@ function buildFinalMetrics(
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
   let totalCachedTokens = 0;
-  let completionUnknown = false;
 
   for (const step of steps) {
     if (step.metrics) {
       totalPromptTokens += step.metrics.prompt_tokens || 0;
-      if (step.metrics.completion_tokens === undefined) {
-        completionUnknown = true;
-      }
       totalCompletionTokens += step.metrics.completion_tokens || 0;
       totalCachedTokens += step.metrics.cached_tokens || 0;
     }
