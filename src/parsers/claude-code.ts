@@ -447,10 +447,14 @@ function buildFinalMetrics(
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
   let totalCachedTokens = 0;
+  let completionUnknown = false;
 
   for (const step of steps) {
     if (step.metrics) {
       totalPromptTokens += step.metrics.prompt_tokens || 0;
+      if (step.metrics.completion_tokens === undefined) {
+        completionUnknown = true;
+      }
       totalCompletionTokens += step.metrics.completion_tokens || 0;
       totalCachedTokens += step.metrics.cached_tokens || 0;
     }
@@ -458,7 +462,10 @@ function buildFinalMetrics(
 
   return {
     total_prompt_tokens: totalPromptTokens,
-    total_completion_tokens: totalCompletionTokens,
+    // Omit rather than report a partial total when any step's output is unknown
+    total_completion_tokens: completionUnknown
+      ? undefined
+      : totalCompletionTokens,
     total_cached_tokens: totalCachedTokens,
     total_cost_usd: result?.total_cost_usd,
     total_steps: steps.length,

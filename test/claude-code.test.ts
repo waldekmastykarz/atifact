@@ -169,6 +169,11 @@ describe("parseClaudeCode", () => {
       assert.equal(t.final_metrics!.total_prompt_tokens, 18 + 25523 + 25749);
       assert.equal(t.final_metrics!.total_cached_tokens, 25523);
     });
+
+    it("omits total completion tokens when an interrupted capture has unknown step usage", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-interrupted-usage.jsonl"));
+      assert.equal(t.final_metrics!.total_completion_tokens, undefined);
+    });
   });
 
   describe("error handling", () => {
