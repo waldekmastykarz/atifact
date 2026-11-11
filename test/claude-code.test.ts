@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaudeCode } from "../src/parsers/claude-code.js";
+import { parseClaudeCode, parseClaudeCodeContent } from "../src/parsers/claude-code.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..", "..");
@@ -157,6 +157,30 @@ describe("parseClaudeCode", () => {
       const { trajectory: t } = await parseClaudeCode(fixture("claude-code-rate-limit-prefix.jsonl"));
       const sources = t.steps.map((s) => s.source);
       assert.deepEqual(sources, ["user", "agent", "agent"]);
+    });
+  });
+
+  describe("step timestamps", () => {
+    const jsonl = [
+      { type: "system", subtype: "init", session_id: "s1", model: "m", tools: [], claude_code_version: "2.1.212" },
+      { type: "user", message: { role: "user", content: [{ type: "text", text: "hi" }] }, parent_tool_use_id: null, timestamp: "2026-11-11T13:00:11.000Z" },
+      { type: "assistant", message: { model: "m", id: "msg_1", role: "assistant", content: [{ type: "tool_use", id: "toolu_1", name: "Read", input: {} }], stop_reason: null, usage: { input_tokens: 1, output_tokens: 1 } }, parent_tool_use_id: null, timestamp: "2026-11-11T13:00:11.934Z" },
+      { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "hello" }] }, parent_tool_use_id: null, timestamp: "2026-11-11T13:00:11.947Z" },
+      { type: "assistant", message: { model: "m", id: "msg_2", role: "assistant", content: [{ type: "text", text: "Hello." }], stop_reason: null, usage: { input_tokens: 1, output_tokens: 1 } }, parent_tool_use_id: null, timestamp: "2026-11-11T13:00:13.166Z" },
+      { type: "result", subtype: "success", num_turns: 2 },
+    ].map((l) => JSON.stringify(l)).join("\n");
+
+    it("sets each step's timestamp from its source line", () => {
+      const { trajectory: t } = parseClaudeCodeContent(jsonl);
+      assert.deepEqual(
+        t.steps.map((s) => s.timestamp),
+        ["2026-11-11T13:00:11.000Z", "2026-11-11T13:00:11.934Z", "2026-11-11T13:00:13.166Z"]
+      );
+    });
+
+    it("omits timestamp when the source line has none", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      for (const step of t.steps) assert.equal("timestamp" in step, false);
     });
   });
 });
