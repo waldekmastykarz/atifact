@@ -155,6 +155,28 @@ describe("CLI integration", () => {
     }
   });
 
+  it("writes a separate file per Claude Code subagent even when task descriptions repeat", async () => {
+    const outputPrefix = resolve(projectRoot, "test", "fixtures", "claude-code-agent-repeated-test-output");
+    const ids = ["toolu_agent_a", "toolu_agent_b"];
+    const files = [`${outputPrefix}.trajectory.json`, ...ids.map((id) => `${outputPrefix}.trajectory.${id}.json`)];
+
+    try {
+      await exec("node", [cli, fixture("claude-code-agent-tool-repeated.jsonl"), "-o", outputPrefix, "--quiet"]);
+      const root = JSON.parse(await readFile(files[0], "utf-8"));
+      const refs = root.steps.flatMap((s: any) => s.observation?.results ?? []).flatMap((r: any) => r.subagent_trajectory_ref ?? []);
+      assert.deepEqual(
+        refs.map((r: any) => r.trajectory_path),
+        ids.map((id) => `claude-code-agent-repeated-test-output.trajectory.${id}.json`)
+      );
+      for (const [i, id] of ids.entries()) {
+        const sub = JSON.parse(await readFile(files[i + 1], "utf-8"));
+        assert.equal(sub.trajectory_id, id);
+      }
+    } finally {
+      await Promise.all(files.map((f) => unlink(f).catch(() => {})));
+    }
+  });
+
   it("respects --format to force parser", async () => {
     const { stdout } = await exec("node", [
       cli,

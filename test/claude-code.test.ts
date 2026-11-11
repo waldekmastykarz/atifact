@@ -119,7 +119,7 @@ describe("parseClaudeCode", () => {
       assert.equal(result.source_call_id, "toolu_agent");
       assert.equal(result.content, "The file contains: hello");
       assert.deepEqual(result.subagent_trajectory_ref, [
-        { trajectory_id: "toolu_agent", session_id: "sess-agent789:Read a.txt content" },
+        { trajectory_id: "toolu_agent", session_id: "sess-agent789:toolu_agent" },
       ]);
     });
 

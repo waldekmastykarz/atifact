@@ -232,7 +232,8 @@ function buildSubagentTrajectories(
       finalUsageByMessageId
     );
     const steps = buildSteps(subLines, finalUsageByMessageId);
-    const subSessionId = `${init.session_id}:${taskName || parentId}`;
+    // parentId keeps names unique when tasks share a description
+    const subSessionId = `${init.session_id}:${parentId}`;
 
     trajectories.set(parentId, {
       schema_version: "ATIF-v1.8",
