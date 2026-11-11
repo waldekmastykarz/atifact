@@ -37,6 +37,7 @@ interface ClaudeCodeAssistant {
   parent_tool_use_id: string | null;
   session_id: string;
   uuid: string;
+  timestamp?: string;
 }
 
 interface ClaudeContentBlock {
@@ -68,6 +69,7 @@ interface ClaudeCodeUser {
     content: ClaudeUserContent[];
   };
   tool_use_result?: Record<string, unknown>;
+  timestamp?: string;
 }
 
 interface ClaudeUserContent {
@@ -193,6 +195,7 @@ function buildSteps(lines: ClaudeCodeLine[]): Step[] {
 
       const step: Step = {
         step_id: stepId,
+        ...(assistant.timestamp ? { timestamp: assistant.timestamp } : {}),
         source: "agent",
         model_name: assistant.message.model,
         message: text,
@@ -246,6 +249,7 @@ function buildSteps(lines: ClaudeCodeLine[]): Step[] {
         if (text) {
           steps.push({
             step_id: stepId,
+            ...(user.timestamp ? { timestamp: user.timestamp } : {}),
             source: "user",
             message: text,
           });
