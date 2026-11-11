@@ -234,4 +234,27 @@ describe("parseClaudeCode", () => {
       for (const step of t.steps) assert.equal("timestamp" in step, false);
     });
   });
+
+  describe("thinking blocks", () => {
+    it("maps thinking text to reasoning_content", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-thinking.jsonl"));
+      const reasoning = t.steps.map((s) => s.reasoning_content).filter(Boolean);
+      assert.deepEqual(reasoning, [
+        "The user wants me to read a.txt.",
+        "The file contains the word hello.",
+      ]);
+    });
+
+    it("keeps thinking out of the message and alongside text", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-thinking.jsonl"));
+      const last = t.steps[t.steps.length - 1];
+      assert.equal(last.message, "Hello.");
+      assert.equal(last.reasoning_content, "The file contains the word hello.");
+    });
+
+    it("omits reasoning_content when there is no thinking", async () => {
+      const { trajectory: t } = await parseClaudeCode(fixture("claude-code-simple.jsonl"));
+      assert.ok(t.steps.every((s) => s.reasoning_content === undefined));
+    });
+  });
 });
